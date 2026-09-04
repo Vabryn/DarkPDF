@@ -30,7 +30,7 @@
   [
     'uploadSection', 'dropZone', 'fileInput', 'btnUpload', 'btnDemo',
     'workspace', 'viewerContainer',
-    'docTitle', 'docMeta', 'btnNewDoc', 'btnDownload', 'sizeChip',
+    'docTitle', 'docMeta', 'btnNewDoc', 'btnOpenDoc', 'btnDownload', 'sizeChip',
     'themeSelect', 'btnToggleStudio', 'engineSelect', 'pageRangeInput',
     'zoomSlider', 'zoomVal', 'btnZoomReset', 'btnZoomFill',
     'btnPrevPage', 'btnNextPage', 'pageInput', 'pageTotalDisplay',
@@ -158,6 +158,8 @@
       els.uploadSection.style.display = 'flex';
       els.fileInput.value = '';
     });
+    // open a different PDF without leaving the workspace
+    els.btnOpenDoc.addEventListener('click', () => { els.fileInput.value = ''; els.fileInput.click(); });
 
     els.btnToggleStudio.addEventListener('click', () => els.colorStudioDrawer.classList.toggle('open'));
     els.btnCloseStudio.addEventListener('click', () => els.colorStudioDrawer.classList.remove('open'));
