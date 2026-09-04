@@ -113,6 +113,12 @@
           const lift = 0.05 + (oc.borderBrightness - 0.8) * 0.06;
           return [clamp(bg.r + lift, 0, 1), clamp(bg.g + lift, 0, 1), clamp(bg.b + lift + 0.01, 0, 1)];
         }
+        // "Unify Vectors to Accent" recolours chromatic content to oc.rgb
+        // (below) — apply the same override to black/grey vector art (axis
+        // lines, rules, diagram strokes), which otherwise never left this
+        // neutral branch and so never picked up the accent colour at all.
+        if (oc.mode === 'tint' || oc.mode === 'custom') return [oc.rgb.r, oc.rgb.g, oc.rgb.b];
+
         // rules, dark shapes, and any stroke (axis lines, thin borders, faint
         // gridlines): scale with original strength, but never drop below a
         // contrast floor anchored to the background — a light-grey original

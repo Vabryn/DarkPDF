@@ -45,5 +45,23 @@ const { StreamParser } = require('./_boot.js');
   c = rgbOf(run('0.02 0.02 0.02 RG 0 0 m 10 10 l S'));
   ok(lum(c) > 0.45, `near-black stroke stays bold, unaffected by the floor (lum ${lum(c).toFixed(3)})`);
 
+  // "Unify Vectors to Accent" (objMode: 'tint') must also recolour black/grey
+  // vector art (axis lines, diagram strokes) — previously only chromatic
+  // content ever reached oc.rgb, so this mode had zero effect on line art.
+  const tintCfg = { ...cfg, objMode: 'tint' };
+  const runTint = (s) => new TextDecoder().decode(StreamParser.transformStreamBytes(new TextEncoder().encode(s), tintCfg).bytes).trim();
+  const accent = StreamParser.parseHex(tintCfg.objHex);
+
+  c = rgbOf(runTint('0.85 0.85 0.85 RG 0 0 m 10 10 l S'));
+  ok(Math.abs(c[0] - accent.r) < 0.01 && Math.abs(c[2] - accent.b) < 0.01, `tint mode recolours a light-grey stroke to the accent (${c})`);
+
+  c = rgbOf(runTint('0.02 0.02 0.02 RG 0 0 m 10 10 l S'));
+  ok(Math.abs(c[0] - accent.r) < 0.01 && Math.abs(c[2] - accent.b) < 0.01, `tint mode recolours a near-black stroke to the accent (${c})`);
+
+  // structural page chrome (background/zebra fills) stays bg-anchored even in
+  // tint mode — "unify vectors" should not repaint the page surface itself
+  c = rgbOf(runTint('0.97 0.98 1 rg 0 0 10 10 re f'));
+  ok(lum(c) < 0.18, `zebra-row fill stays bg-anchored in tint mode, not accent-coloured (lum ${lum(c).toFixed(3)})`);
+
   summary();
 })().catch(e => { console.error(e); process.exitCode = 1; });
