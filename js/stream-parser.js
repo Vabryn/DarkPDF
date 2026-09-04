@@ -113,7 +113,16 @@
           const lift = 0.05 + (oc.borderBrightness - 0.8) * 0.06;
           return [clamp(bg.r + lift, 0, 1), clamp(bg.g + lift, 0, 1), clamp(bg.b + lift + 0.01, 0, 1)];
         }
-        const v = clamp(0.22 + (1 - l) * oc.borderBrightness * 0.5, 0.14, 0.82);  // rules, dark shapes
+        // rules, dark shapes, and any stroke (axis lines, thin borders, faint
+        // gridlines): scale with original strength, but never drop below a
+        // contrast floor anchored to the background — a light-grey original
+        // (common for de-emphasised chart strokes) used to map toward the
+        // low end of this range and all but vanished against a near-black bg.
+        const strength = clamp((1 - l) * oc.borderBrightness, 0, 1);
+        const base = 0.22 + strength * 0.5;
+        const bgL = (bg.r + bg.g + bg.b) / 3;
+        const floor = bgL + 0.28;         // flat: thin strokes/small marks need real headroom, not a taper
+        const v = clamp(Math.max(base, floor), 0.14, 0.82);
         return [v, v, v];
       }
 

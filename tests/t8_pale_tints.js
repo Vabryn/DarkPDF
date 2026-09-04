@@ -5,7 +5,7 @@ const { StreamParser } = require('./_boot.js');
   console.log('\n=== TEST 8: pale tint neutrality + readability ===');
   const cfg = { bgHex: '#18181b', textHex: '#f4f4f5', objHex: '#38bdf8', objMode: 'adapt', objSaturation: 1, objBorderBrightness: 0.8 };
   const run = (s) => new TextDecoder().decode(StreamParser.transformStreamBytes(new TextEncoder().encode(s), cfg).bytes).trim();
-  const rgbOf = (out) => { const m = out.match(/([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+rg/); return [ +m[1], +m[2], +m[3] ]; };
+  const rgbOf = (out) => { const m = out.match(/([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+[rR][gG]/); return [ +m[1], +m[2], +m[3] ]; };
   const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
   const chroma = ([r, g, b]) => Math.max(r, g, b) - Math.min(r, g, b);
 
@@ -30,6 +30,20 @@ const { StreamParser } = require('./_boot.js');
   // white text on a coloured badge (light neutral, inside BT) -> must stay visibly light
   c = rgbOf(run('BT 1 1 1 rg (x) Tj ET'));
   ok(lum(c) > 0.55, `white badge text stays light (lum ${lum(c).toFixed(3)})`);
+
+  // neutral STROKES (axis lines, thin borders) — a light-grey original used to
+  // taper toward the low end of the "rules, dark shapes" range and nearly
+  // vanish against a near-black background; must now clear a contrast floor.
+  const bgLum = lum([0x18 / 255, 0x18 / 255, 0x1b / 255]);
+  c = rgbOf(run('0.85 0.85 0.85 RG 0 0 m 10 10 l S'));
+  ok(lum(c) - bgLum > 0.2, `light-grey axis-line stroke clears contrast floor (lum ${lum(c).toFixed(3)} vs bg ${bgLum.toFixed(3)})`);
+
+  c = rgbOf(run('0.6 0.6 0.6 RG 0 0 m 10 10 l S'));
+  ok(lum(c) - bgLum > 0.2, `mid-grey stroke stays clearly visible (lum ${lum(c).toFixed(3)})`);
+
+  // solid near-black stroke should stay bold — the floor must not water it down
+  c = rgbOf(run('0.02 0.02 0.02 RG 0 0 m 10 10 l S'));
+  ok(lum(c) > 0.45, `near-black stroke stays bold, unaffected by the floor (lum ${lum(c).toFixed(3)})`);
 
   summary();
 })().catch(e => { console.error(e); process.exitCode = 1; });
