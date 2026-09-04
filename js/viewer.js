@@ -39,6 +39,7 @@
       this._resizeTimer = null;
       this._resizeRaf = 0;
       this._renderedScale = 1;            // scale the visible bitmap was last painted at
+      this._lastRenderedPage = 0;         // page the visible bitmap was last painted for
       this._baseW = 0;                    // page size at scale 1 (cached for cheap resize math)
       this._baseH = 0;
       this.onZoomChange = null;            // app hook: fired with the effective % when fit recomputes
@@ -174,11 +175,18 @@
         scale = strategy === 'width' ? box.w / vp.width : Math.min(box.w / vp.width, box.h / vp.height);
       } catch (e) { return; }
       scale = Math.max(0.25, Math.min(4, scale));
-      if (Math.abs(scale - this.zoomScale) > 0.002) {
+      // Consecutive pages are very often the same size, so the fit scale
+      // frequently doesn't change between them — but the page itself did,
+      // and skipping the render then just leaves the previous page on
+      // screen while the page counter moves on. Always render on a page
+      // change; only skip when neither the page nor the scale moved (e.g.
+      // a resize settling back to the same fit).
+      const pageChanged = this._lastRenderedPage !== this.currentPage;
+      if (pageChanged || Math.abs(scale - this.zoomScale) > 0.002) {
         this.zoomScale = scale;
         await this.renderCurrentPage();          // clears the preview on paint
       } else {
-        this._clearPreview();                    // settled on the same scale
+        this._clearPreview();                    // settled on the same page and scale
       }
       if (this.onZoomChange) this.onZoomChange(Math.round(scale * 100));
     }
@@ -268,7 +276,7 @@
     async goToPage(pageNum) {
       if (!this.pdfDoc || pageNum < 1 || pageNum > this.totalPages) return;
       this.currentPage = pageNum;
-      if (this.fitMode) await this.fitToView();
+      if (this.fitMode) await this._fit(this.fitStrategy);   // preserve Fit vs Fill across page navigation
       else await this.renderCurrentPage();
     }
 
@@ -341,6 +349,7 @@
       this._baseW = vp.width / this.zoomScale;
       this._baseH = vp.height / this.zoomScale;
       this._renderedScale = this.zoomScale;
+      this._lastRenderedPage = this.currentPage;
       this._clearPreview();                        // this frame is painted at the real scale
       this.stage.style.width = `${w}px`;
       this.stage.style.height = `${h}px`;
