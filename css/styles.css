@@ -187,18 +187,6 @@ body {
   .header-progress-track { width: 90px; }
 }
 
-.badge-pill {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-hairline);
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-}
-
 .header-status {
   display: flex;
   align-items: center;
@@ -916,15 +904,6 @@ kbd {
 
 .split-slider:hover .slider-handle {
   transform: translate(-50%, -50%) scale(1.15);
-}
-
-.handle-icon {
-  display: none;
-}
-
-.handle-arrow {
-  font-size: 7px;
-  opacity: 0.8;
 }
 
 /* Minimalist View Badges */

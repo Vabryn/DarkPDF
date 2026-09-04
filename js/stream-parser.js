@@ -117,7 +117,7 @@
         // (below) — apply the same override to black/grey vector art (axis
         // lines, rules, diagram strokes), which otherwise never left this
         // neutral branch and so never picked up the accent colour at all.
-        if (oc.mode === 'tint' || oc.mode === 'custom') return [oc.rgb.r, oc.rgb.g, oc.rgb.b];
+        if (oc.mode === 'tint') return [oc.rgb.r, oc.rgb.g, oc.rgb.b];
 
         // rules, dark shapes, and any stroke (axis lines, thin borders, faint
         // gridlines): scale with original strength, but never drop below a
@@ -132,7 +132,7 @@
         return [v, v, v];
       }
 
-      if (oc.mode === 'tint' || oc.mode === 'custom') return [oc.rgb.r, oc.rgb.g, oc.rgb.b];
+      if (oc.mode === 'tint') return [oc.rgb.r, oc.rgb.g, oc.rgb.b];
       return this.hslToRgb(h, clamp(s * oc.saturation, 0, 1), clamp(1 - l, 0.32, 0.86));
     },
 
