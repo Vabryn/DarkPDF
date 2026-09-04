@@ -18,7 +18,6 @@
     convertedBytes: null,
     conversionFresh: false,
     conversionRange: 'All',
-    conversionCapped: false,
     fileName: 'document.pdf',
     fileSize: 0,
     pageCount: 0,
@@ -42,7 +41,7 @@
     'studioObjColor', 'studioObjHex', 'studioObjMode', 'sliderObjSaturation', 'valObjSaturation',
     'sliderObjBorder', 'valObjBorder',
     'progressModal', 'progressBar', 'progressPercent', 'progressStatus',
-    'headerProgress', 'headerProgressFill', 'btnRenderRemainder'
+    'headerProgress', 'headerProgressFill'
   ].forEach((id) => { els[id] = document.getElementById(id); });
 
   let converter, viewer;
@@ -162,10 +161,6 @@
     });
     // open a different PDF without leaving the workspace
     els.btnOpenDoc.addEventListener('click', () => { els.fileInput.value = ''; els.fileInput.click(); });
-    els.btnRenderRemainder.addEventListener('click', () => {
-      const full = (els.pageRangeInput.value || '').trim() || 'All';
-      runFull(full);
-    });
 
     els.btnToggleStudio.addEventListener('click', () => els.colorStudioDrawer.classList.toggle('open'));
     els.btnCloseStudio.addEventListener('click', () => els.colorStudioDrawer.classList.remove('open'));
@@ -273,7 +268,10 @@
     els.btnPrevPage.disabled = page <= 1;
     els.btnNextPage.disabled = page >= state.pageCount;
     viewer.goToPage(page);
-    if (!state.conversionFresh) schedulePreview();
+    // A page jump converts immediately, not on the slider-drag debounce —
+    // it's proportional to that one page alone, so on a 1000-page book this
+    // is just as fast as on a 10-page one, and there's no reason to delay it.
+    if (!state.conversionFresh) { clearTimeout(previewTimer); runPreview(); }
   }
 
   /* ---- conversion scheduling ---- */
@@ -302,20 +300,20 @@
     }
   }
 
-  // The automatic background pass stays lightweight on large books: it only
-  // ever renders the first PAGE_CAP pages on its own. The header progress
-  // bar shows that pass; if there's more document left, "Render rest of
-  // document" continues the same bar on request. Either way, Export always
-  // gets the full thing -- if the background pass never covered the whole
-  // target range, exportPdf()'s own freshness check reconverts it there.
-  const PAGE_CAP = 50;
-
+  // The background pass converts the WHOLE target range, same as Export
+  // will need — but converter.js now yields on an elapsed-time budget
+  // (8ms) rather than a fixed stream count, using requestIdleCallback where
+  // available. That makes it self-adapting to whatever the device can do:
+  // a slow machine simply gets more, smaller slices, so the main thread is
+  // never held for long regardless of how weak the hardware is. Meanwhile
+  // jumping to any page renders instantly on its own (see gotoPage/
+  // runPreview below) — a single page's conversion is proportional to that
+  // page alone, never to the book's total length, so it isn't waiting on
+  // this pass at all.
   async function runFull(explicitRange) {
     if (!state.originalBytes) return;
     const token = ++fullToken;
-    const userRange = (els.pageRangeInput.value || '').trim() || 'All';
-    const capped = !explicitRange && state.pageCount > PAGE_CAP;
-    const range = explicitRange || (capped ? `1-${PAGE_CAP}` : userRange);
+    const range = explicitRange || (els.pageRangeInput.value || '').trim() || 'All';
     showHeaderProgress();
     try {
       const res = await converter.convert(state.originalBytes, {
@@ -327,12 +325,11 @@
       state.convertedBytes = res.pdfBytes;
       state.conversionFresh = true;
       state.conversionRange = range;
-      state.conversionCapped = capped;
 
       try { await viewer.setDarkDocument(res.pdfBytes, false); } catch (e) { console.warn('dark render', e); }
       if (token !== fullToken) return;
       await runRetention(res, token);
-      finishHeaderProgress(capped);
+      finishHeaderProgress();
     } catch (e) {
       hideHeaderProgress();
       console.error(e);
@@ -343,7 +340,6 @@
   function showHeaderProgress() {
     els.headerProgress.hidden = false;
     els.headerProgress.classList.remove('is-complete', 'is-fading');
-    els.btnRenderRemainder.hidden = true;
     setHeaderProgress(2);
   }
   function setHeaderProgress(pct) {
@@ -352,16 +348,12 @@
   // 100% -> brief glow pulse + sparkle (.is-complete) -> the fill melts back
   // to transparent (.is-fading), same colour as the header, so it disappears
   // instead of sitting there as a spent white pill.
-  function finishHeaderProgress(wasCapped) {
+  function finishHeaderProgress() {
     setHeaderProgress(100);
     els.headerProgress.classList.add('is-complete');
     setTimeout(() => {
       els.headerProgress.classList.add('is-fading');
-      if (wasCapped && state.pageCount > PAGE_CAP) {
-        els.btnRenderRemainder.hidden = false;              // more pages waiting, offer to continue
-      } else {
-        setTimeout(() => { els.headerProgress.hidden = true; }, 500);
-      }
+      setTimeout(() => { els.headerProgress.hidden = true; }, 500);
     }, 700);
   }
   function hideHeaderProgress() { els.headerProgress.hidden = true; }

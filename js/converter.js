@@ -278,7 +278,17 @@
       this.currentTheme = normalizeTheme('custom', 'Custom Palette', c.bgHex, c.textHex, c.objHex || '#38bdf8');
     }
 
-    _yield() { return new Promise((r) => setTimeout(r, 0)); }
+    /** Yield to the browser's own idle-time scheduler where available (Chrome/
+     *  Android), falling back to a macrotask yield (Safari/older browsers has
+     *  no requestIdleCallback). Either way this hands control back to
+     *  whatever the user is doing — page render, scroll, click — before the
+     *  background conversion takes its next slice. */
+    _yield() {
+      return new Promise((resolve) => {
+        if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(() => resolve(), { timeout: 300 });
+        else setTimeout(resolve, 0);
+      });
+    }
 
     _getPDFLib() {
       const lib = window.PDFLib || (typeof PDFLib !== 'undefined' ? PDFLib : null);
@@ -469,7 +479,15 @@
       // ---- 2. rewrite each unique stream
       const stat = { engine: 'stream_remap', streamsProcessed: 0, streamsChanged: 0, colorOpsRemapped: 0, colorOpsSkipped: 0, streamsFailed: 0 };
       const entries = Array.from(contentRefs.values());
+      const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
+      // Yield on elapsed time, not a fixed stream count: a slice of work that
+      // takes 8ms on a fast desktop can take far longer on a weak device, so
+      // a fixed "every N streams" cadence either yields too rarely (janky on
+      // slow hardware) or needlessly often (small preview conversions, which
+      // finish in a couple of ms, would otherwise pay for one yield anyway).
+      // Time-budgeting adapts automatically to whatever the device can do.
+      let lastYield = now();
       for (let idx = 0; idx < entries.length; idx++) {
         const { ref, resources } = entries[idx];
         const stream = ctx.lookup(ref);
@@ -500,9 +518,10 @@
         ctx.assign(ref, PDFRawStream.of(newDict, payload));
         stat.streamsChanged++;
 
-        if (idx % 6 === 0 || idx === entries.length - 1) {
+        if (now() - lastYield > 8 || idx === entries.length - 1) {
           onProgress({ stage: 'processing', percent: Math.round(10 + ((idx + 1) / Math.max(1, entries.length)) * 70), message: `Remapping colours — stream ${idx + 1} of ${entries.length}...` });
           await this._yield();
+          lastYield = now();
         }
       }
 
