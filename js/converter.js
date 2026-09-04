@@ -278,16 +278,15 @@
       this.currentTheme = normalizeTheme('custom', 'Custom Palette', c.bgHex, c.textHex, c.objHex || '#38bdf8');
     }
 
-    /** Yield to the browser's own idle-time scheduler where available (Chrome/
-     *  Android), falling back to a macrotask yield (Safari/older browsers has
-     *  no requestIdleCallback). Either way this hands control back to
-     *  whatever the user is doing — page render, scroll, click — before the
-     *  background conversion takes its next slice. */
+    /** Yield to the event loop so pending render/input work gets a turn
+     *  before the next slice of conversion work runs. Measured: on real
+     *  Chromium, requestIdleCallback averaged ~52ms per call here (it waits
+     *  for genuine idle time, which is scarce with anything animating on the
+     *  page) versus ~0-5ms for a plain macrotask yield -- 10x+ worse for
+     *  exactly the case this exists to help. A cheap, frequent yield beats a
+     *  "correct-sounding" one that's an order of magnitude slower in practice. */
     _yield() {
-      return new Promise((resolve) => {
-        if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(() => resolve(), { timeout: 300 });
-        else setTimeout(resolve, 0);
-      });
+      return new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     _getPDFLib() {
