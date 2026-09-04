@@ -317,10 +317,15 @@
       if (this[slot] === task) this[slot] = null;
       if (token !== this._renderToken) return;
 
-      canvas.width = dw;                           // resize + blit happen in the same tick: no flash
+      // Resize + blit happen in the same tick: no flash. CSS keeps the canvas
+      // at 100% of its container (see .pdf-canvas) instead of an explicit px
+      // size — light and dark repaint on separate awaits, so whichever one
+      // hasn't finished yet would otherwise sit at its old pixel size inside
+      // an already-resized stage, exposing the white page background in the
+      // gap. At 100% it always fills the stage (stretching its stale bitmap
+      // for the instant before its own repaint lands), so there is never a gap.
+      canvas.width = dw;
       canvas.height = dh;
-      canvas.style.width = `${Math.floor(vp.width)}px`;
-      canvas.style.height = `${Math.floor(vp.height)}px`;
       canvas.getContext('2d').drawImage(off, 0, 0);
     }
 
@@ -352,8 +357,6 @@
         // no converted doc yet — neutral dark placeholder so the split isn't blank
         this.canvasDark.width = Math.floor(w * ratio);
         this.canvasDark.height = Math.floor(h * ratio);
-        this.canvasDark.style.width = `${w}px`;
-        this.canvasDark.style.height = `${h}px`;
         const c = this.canvasDark.getContext('2d');
         c.setTransform(ratio, 0, 0, ratio, 0, 0);
         c.fillStyle = '#1b1b1b';
