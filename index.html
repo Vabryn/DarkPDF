@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob:; worker-src 'self' blob:; object-src 'self' blob:; base-uri 'none'; form-action 'none'">
+  <title>DarkPDF — Lossless PDF Dark Mode</title>
+  <meta name="description" content="In-browser, zero-upload PDF dark mode converter. Retains native vector glyphs, selectable text, and hyperlinks.">
+  <link rel="stylesheet" href="css/pdf_viewer.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="48" height="20" viewBox="0 0 48 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- source: light PDF -->
+          <rect x="1" y="1.5" width="13" height="17" rx="2" fill="#f4f4f5" stroke="#3f3f46" stroke-width="1.2"/>
+          <path d="M4.5 6.5h6M4.5 9.5h6M4.5 12.5h4" stroke="#3f3f46" stroke-width="1.2" stroke-linecap="round"/>
+          <!-- transform -->
+          <path d="M19 10h9m0 0-3.2-3.2M28 10l-3.2 3.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- output: dark PDF -->
+          <rect x="33" y="1.5" width="13" height="17" rx="2" fill="#18181b" stroke="#52525b" stroke-width="1.2"/>
+          <path d="M36.5 6.5h6M36.5 9.5h6M36.5 12.5h4" stroke="#e4e4e7" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="brand-name">DarkPDF</span>
+    </div>
+    <div class="header-status"><span class="status-label">Secure. Private.</span></div>
+  </header>
+
+  <!-- Upload Landing View -->
+  <main id="uploadSection" class="upload-view">
+    <div class="hero-container">
+      <div class="hero-meta"><span class="hero-tag">In-Browser Utility</span></div>
+      <h1 class="hero-headline"><span class="glow-light">Light</span> to Dark, Losslessly.</h1>
+      <p class="hero-subtext">
+        Transforms PDFs into high-contrast dark documents in your browser. Preserves selectable text, hyperlinks, font glyphs, and vector sharpness without rasterizing to images.
+      </p>
+
+      <div id="dropZone" class="drop-surface">
+        <input type="file" id="fileInput" accept="application/pdf" hidden>
+        <div class="drop-glyph">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <div class="drop-text-group">
+          <span class="drop-lead">Drop your PDF document here</span>
+          <span class="drop-sub">Supports large files, research papers, and technical books</span>
+        </div>
+        <div class="drop-cta-group">
+          <button id="btnUpload" class="btn btn-solid">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Select Document
+          </button>
+          <button id="btnDemo" class="btn btn-outline">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Load Sample PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Workspace -->
+  <main id="workspace" class="workspace" style="display: none;">
+
+    <!-- Top Action Bar -->
+    <div class="workspace-nav">
+      <div class="nav-cluster-left">
+        <button id="btnNewDoc" class="btn-icon" title="Return to upload">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <div class="file-chip">
+          <span id="docTitle" class="chip-filename">document.pdf</span>
+          <span id="docMeta" class="chip-size">0 KB</span>
+        </div>
+      </div>
+
+      <div class="segmented-control">
+        <button class="seg-btn active" data-mode="split" title="Split comparison slider"><span>Split</span></button>
+        <button class="seg-btn" data-mode="dark" title="Converted dark only"><span>Dark</span></button>
+        <button class="seg-btn" data-mode="light" title="Original light only"><span>Light</span></button>
+      </div>
+
+      <div class="nav-cluster-right">
+        <span id="sizeChip" class="size-chip" title="Estimated output size (updates to the real size after conversion)">&mdash;</span>
+        <button id="btnDownload" class="btn btn-solid btn-compact" title="Export lossless dark PDF">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Export Dark PDF</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Sub-Toolbar -->
+    <div class="workspace-subnav">
+      <div class="subnav-left">
+        <div class="select-wrapper">
+          <span class="field-label">Theme</span>
+          <select id="themeSelect" class="clean-select">
+            <option value="slate" selected>Modern Slate</option>
+            <option value="oled">Midnight OLED</option>
+            <option value="espresso">Warm Espresso</option>
+          </select>
+        </div>
+        <button id="btnToggleStudio" class="btn btn-outline btn-compact" title="Open colour customization">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Customize</span>
+        </button>
+        <div class="select-wrapper">
+          <span class="field-label">Type</span>
+          <select id="engineSelect" class="clean-select" title="Standard keeps text & vectors; Scanned re-inverts image-only PDFs">
+            <option value="stream_remap" selected>Standard PDF</option>
+            <option value="scanned_canvas">Scanned PDF</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="subnav-right">
+        <div class="input-wrapper">
+          <span class="field-label">Pages</span>
+          <input type="text" id="pageRangeInput" class="clean-input" placeholder="All" title="e.g. All, or 1-5, 8">
+        </div>
+        <div class="pager-cluster">
+          <button id="btnPrevPage" class="btn-icon-sub" title="Previous page (←)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div class="pager-input-wrap">
+            <input type="number" id="pageInput" class="pager-input" min="1" value="1">
+            <span id="pageTotalDisplay" class="pager-total">/ 1</span>
+          </div>
+          <button id="btnNextPage" class="btn-icon-sub" title="Next page (→)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zoom bar (centered) -->
+    <div class="zoom-bar">
+      <span class="field-label">Zoom</span>
+      <input type="range" id="zoomSlider" min="25" max="400" step="5" value="100" aria-label="Zoom level">
+      <span id="zoomVal" class="zoom-value">100%</span>
+      <button id="btnZoomReset" class="btn-tag" title="Fit the whole page in view">Fit</button>
+      <button id="btnZoomFill" class="btn-tag" title="Fill the pane width with the page">Fill</button>
+    </div>
+
+    <!-- Colour Customization Drawer -->
+    <aside id="colorStudioDrawer" class="studio-drawer">
+      <div class="drawer-header">
+        <div class="drawer-heading">
+          <span class="drawer-title">Customize</span>
+          <span class="drawer-sub">Lossless stream parameters</span>
+        </div>
+        <button id="btnCloseStudio" class="btn-icon-sub" title="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="drawer-body">
+        <div class="param-card">
+          <div class="param-card-header"><span class="param-group-name">Background</span></div>
+          <div class="param-field">
+            <span class="param-label">Base Tone</span>
+            <div class="color-hex-group">
+              <input type="color" id="studioBgColor" value="#18181b" class="swatch-picker">
+              <input type="text" id="studioBgHex" class="param-hex" value="#18181b">
+            </div>
+          </div>
+          <div class="param-field">
+            <div class="param-label-row"><span class="param-label">Lightness</span><span id="valBgLightness" class="param-numeric">9%</span></div>
+            <input type="range" id="sliderBgLightness" min="0" max="30" value="9" class="fine-slider">
+          </div>
+          <div class="param-field">
+            <div class="param-label-row"><span class="param-label">Colour Warmth</span><span id="valBgTint" class="param-numeric">Neutral</span></div>
+            <input type="range" id="sliderBgTint" min="-50" max="50" value="0" class="fine-slider">
+          </div>
+        </div>
+
+        <div class="param-card">
+          <div class="param-card-header"><span class="param-group-name">Typography &amp; Text</span></div>
+          <div class="param-field">
+            <span class="param-label">Font Glyph Tone</span>
+            <div class="color-hex-group">
+              <input type="color" id="studioTextColor" value="#f4f4f5" class="swatch-picker">
+              <input type="text" id="studioTextHex" class="param-hex" value="#f4f4f5">
+            </div>
+          </div>
+          <div class="param-field">
+            <div class="param-label-row"><span class="param-label">Brightness</span><span id="valTextBrightness" class="param-numeric">100%</span></div>
+            <input type="range" id="sliderTextBrightness" min="60" max="100" value="100" class="fine-slider">
+          </div>
+          <div class="param-field">
+            <div class="param-label-row"><span class="param-label">Contrast Amplification</span><span id="valTextContrast" class="param-numeric">1.0x</span></div>
+            <input type="range" id="sliderTextContrast" min="80" max="160" value="100" class="fine-slider">
+          </div>
+          <div class="param-field">
+            <div class="param-label-row"><span class="param-label">Warmth / Tint</span><span id="valTextWarmth" class="param-numeric">0</span></div>
+            <input type="range" id="sliderTextWarmth" min="-50" max="50" value="0" class="fine-slider">
+          </div>
+        </div>
+
+        <div class="param-card">
+          <div class="param-card-header"><span class="param-group-name">Vector Objects &amp; Tables</span></div>
+          <div class="param-field">
+            <span class="param-label">Accent Highlight</span>
+            <div class="color-hex-group">
+              <input type="color" id="studioObjColor" value="#38bdf8" class="swatch-picker">
+              <input type="text" id="studioObjHex" class="param-hex" value="#38bdf8">
+            </div>
+          </div>
+          <div class="param-field">
+            <span class="param-label">Vector Transform</span>
+            <select id="studioObjMode" class="clean-select" style="width: 100%;">
+              <option value="adapt" selected>Adapt Lightness (Keep Hues)</option>
+              <option value="tint">Unify Vectors to Accent</option>
+              <option value="custom">Explicit Custom Tone</option>
+            </select>
+          </div>
+          <div class="param-field">
+            <div class="param-label-row"><span class="param-label">Object Saturation</span><span id="valObjSaturation" class="param-numeric">100%</span></div>
+            <input type="range" id="sliderObjSaturation" min="0" max="150" value="100" class="fine-slider">
+          </div>
+          <div class="param-field">
+            <div class="param-label-row"><span class="param-label">Table Lines &amp; Borders</span><span id="valObjBorder" class="param-numeric">80%</span></div>
+            <input type="range" id="sliderObjBorder" min="20" max="120" value="80" class="fine-slider">
+          </div>
+        </div>
+
+        <button id="btnResetStudio" class="btn btn-outline" style="width: 100%; font-size: 12px; margin-top: 4px;">Reset to theme defaults</button>
+      </div>
+    </aside>
+
+    <div class="stage-viewport"><div id="viewerContainer"></div></div>
+  </main>
+
+  <!-- Progress Modal -->
+  <div id="progressModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-spinner"></div>
+      <span class="modal-heading">Processing</span>
+      <span id="progressStatus" class="modal-detail">Preparing pages...</span>
+      <div class="progress-trough"><div id="progressBar" class="progress-indicator"></div></div>
+      <span id="progressPercent" class="modal-counter">0%</span>
+    </div>
+  </div>
+
+  <!-- Bundled local libraries (no CDN, no network) -->
+  <script src="js/vendor/pdf-lib.min.js"></script>
+  <script src="js/vendor/pdf.min.js"></script>
+  <script src="js/vendor/pako.min.js"></script>
+  <script src="js/stream-parser.js"></script>
+  <script src="js/converter.js"></script>
+  <script src="js/retention.js"></script>
+  <script src="js/viewer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
