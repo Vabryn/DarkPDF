@@ -18,6 +18,7 @@
     convertedBytes: null,
     conversionFresh: false,
     conversionRange: 'All',
+    conversionCapped: false,
     fileName: 'document.pdf',
     fileSize: 0,
     pageCount: 0,
@@ -40,7 +41,8 @@
     'sliderTextContrast', 'valTextContrast', 'sliderTextWarmth', 'valTextWarmth',
     'studioObjColor', 'studioObjHex', 'studioObjMode', 'sliderObjSaturation', 'valObjSaturation',
     'sliderObjBorder', 'valObjBorder',
-    'progressModal', 'progressBar', 'progressPercent', 'progressStatus'
+    'progressModal', 'progressBar', 'progressPercent', 'progressStatus',
+    'headerProgress', 'headerProgressFill', 'btnRenderRemainder'
   ].forEach((id) => { els[id] = document.getElementById(id); });
 
   let converter, viewer;
@@ -160,6 +162,10 @@
     });
     // open a different PDF without leaving the workspace
     els.btnOpenDoc.addEventListener('click', () => { els.fileInput.value = ''; els.fileInput.click(); });
+    els.btnRenderRemainder.addEventListener('click', () => {
+      const full = (els.pageRangeInput.value || '').trim() || 'All';
+      runFull(full);
+    });
 
     els.btnToggleStudio.addEventListener('click', () => els.colorStudioDrawer.classList.toggle('open'));
     els.btnCloseStudio.addEventListener('click', () => els.colorStudioDrawer.classList.remove('open'));
@@ -296,26 +302,63 @@
     }
   }
 
-  async function runFull() {
+  // The automatic background pass stays lightweight on large books: it only
+  // ever renders the first PAGE_CAP pages on its own. The header progress
+  // bar shows that pass; if there's more document left, "Render rest of
+  // document" continues the same bar on request. Either way, Export always
+  // gets the full thing -- if the background pass never covered the whole
+  // target range, exportPdf()'s own freshness check reconverts it there.
+  const PAGE_CAP = 50;
+
+  async function runFull(explicitRange) {
     if (!state.originalBytes) return;
     const token = ++fullToken;
-    const range = (els.pageRangeInput.value || '').trim() || 'All';
+    const userRange = (els.pageRangeInput.value || '').trim() || 'All';
+    const capped = !explicitRange && state.pageCount > PAGE_CAP;
+    const range = explicitRange || (capped ? `1-${PAGE_CAP}` : userRange);
+    showHeaderProgress();
     try {
-      const res = await converter.convert(state.originalBytes, { engine: state.activeEngine, pageRange: range });
+      const res = await converter.convert(state.originalBytes, {
+        engine: state.activeEngine, pageRange: range,
+        onProgress: (p) => { if (token === fullToken) setHeaderProgress(p.percent); }
+      });
       if (token !== fullToken) return;
 
       state.convertedBytes = res.pdfBytes;
       state.conversionFresh = true;
       state.conversionRange = range;
+      state.conversionCapped = capped;
 
       try { await viewer.setDarkDocument(res.pdfBytes, false); } catch (e) { console.warn('dark render', e); }
       if (token !== fullToken) return;
       await runRetention(res, token);
+      finishHeaderProgress(capped);
     } catch (e) {
+      hideHeaderProgress();
       console.error(e);
       toast('Conversion failed: ' + (e && e.message ? e.message : e), 'error');
     }
   }
+
+  function showHeaderProgress() {
+    els.headerProgress.hidden = false;
+    els.headerProgress.classList.remove('is-complete');
+    els.btnRenderRemainder.hidden = true;
+    setHeaderProgress(2);
+  }
+  function setHeaderProgress(pct) {
+    els.headerProgressFill.style.width = Math.max(2, Math.min(100, pct)) + '%';
+  }
+  function finishHeaderProgress(wasCapped) {
+    setHeaderProgress(100);
+    els.headerProgress.classList.add('is-complete');
+    if (wasCapped && state.pageCount > PAGE_CAP) {
+      els.btnRenderRemainder.hidden = false;               // more pages waiting, offer to continue
+    } else {
+      setTimeout(() => { els.headerProgress.hidden = true; }, 600);
+    }
+  }
+  function hideHeaderProgress() { els.headerProgress.hidden = true; }
 
   // Verify the conversion changed only colour — warn (once) if anything else moved.
   async function runRetention(convResult, token) {

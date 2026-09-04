@@ -91,6 +91,84 @@ body {
   color: var(--text-pure);
 }
 
+/* Header render-progress: centred in the top bar, shows only while the
+   background conversion pass (capped at PAGE_CAP pages) is running or has
+   more pages waiting. */
+.header-progress {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-progress-track {
+  width: 150px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  position: relative;
+}
+
+.header-progress-fill {
+  position: relative;
+  height: 100%;
+  width: 2%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 7px rgba(255, 255, 255, 0.85), 0 0 2px rgba(255, 255, 255, 0.9);
+  transition: width 0.25s ease;
+  overflow: hidden;
+}
+
+.header-progress-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
+  background-size: 60px 100%;
+  background-repeat: no-repeat;
+  filter: blur(0.5px);
+  animation: header-progress-glow 1.5s ease-in-out infinite;
+}
+
+.header-progress.is-complete .header-progress-fill::after { animation: none; opacity: 0; }
+
+@keyframes header-progress-glow {
+  0%   { background-position: -60px 0; }
+  100% { background-position: 150px 0; }
+}
+
+.header-progress-more {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 1px solid var(--border-hairline);
+  border-radius: 999px;
+  padding: 3px 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.header-progress-more:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-progress-fill::after { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .header-progress-track { width: 90px; }
+  .header-progress-more { display: none; }         /* still renders in the background, just no inline control */
+}
+
 .badge-pill {
   font-size: 10px;
   font-weight: 500;
