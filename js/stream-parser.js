@@ -271,8 +271,12 @@
         else if (lower === 'k' && vals.length >= 4) { rgb = this._cmykToRgb(...vals.slice(-4)); consume = 4; }
         else if (lower === 'sc' || lower === 'scn') {
           if (operands.some((o) => o.t === 'name')) { stats.skipped++; return; }   // pattern colour
-          if (cs === 'skip') { stats.skipped++; return; }                          // Indexed / Separation / DeviceN / Lab
-          if (cs === 'gray' && vals.length >= 1) { const v = vals[vals.length - 1]; rgb = [v, v, v]; }
+          if (cs && typeof cs === 'object' && cs.evaluate) {                       // resolved Separation/DeviceN tint
+            if (!vals.length) { stats.skipped++; return; }
+            rgb = cs.evaluate(vals[vals.length - 1]);
+          }
+          else if (cs === 'skip') { stats.skipped++; return; }                     // Indexed / unresolved Separation / Lab
+          else if (cs === 'gray' && vals.length >= 1) { const v = vals[vals.length - 1]; rgb = [v, v, v]; }
           else if (cs === 'rgb' && vals.length >= 3) rgb = vals.slice(-3);
           else if (cs === 'cmyk' && vals.length >= 4) rgb = this._cmykToRgb(...vals.slice(-4));
           // unresolved space: only 3- or 4-operand forms are unambiguously RGB/CMYK-shaped

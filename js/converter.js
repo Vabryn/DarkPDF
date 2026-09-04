@@ -27,6 +27,208 @@
 
   const SKIP_STREAM_KEYS = new Set(['Filter', 'DecodeParms', 'DP', 'Length', 'F', 'FFilter', 'FDecodeParms']);
 
+  /**
+   * Compile a PDF tint-transform function (Types 0, 2, 3, 4) into a cheap
+   * `(t) => number[]` closure. Used ONLY to resolve Separation / single-
+   * colorant DeviceN colourspaces into a real RGB-producing function — every
+   * other colourspace already has a direct, unambiguous conversion. All the
+   * expensive work (decompressing a stream, parsing a PostScript program) is
+   * done ONCE here, up front, so the returned closure — which may run once
+   * per colour operator in a content stream — is just arithmetic. Any
+   * unsupported feature throws immediately (at compile time, not per-call),
+   * and the caller falls back to leaving that colourspace untouched.
+   */
+  function compilePdfFunction(fnObj, resolve, lib) {
+    const { PDFName, PDFArray, PDFRawStream, decodePDFRawStream } = lib;
+    const fn = resolve(fnObj);
+    if (!fn) throw new Error('null function');
+    const dict = fn.dict || fn;
+    const get = (k) => resolve(dict.get(PDFName.of(k)));
+    const asNum = (v) => (v && v.asNumber ? v.asNumber() : Number(v));
+    const numArr = (v) => {
+      const a = resolve(v);
+      if (!(a instanceof PDFArray)) return null;
+      const out = [];
+      for (let i = 0; i < a.size(); i++) out.push(asNum(resolve(a.get(i))));
+      return out;
+    };
+
+    const domain = numArr(get('Domain')) || [0, 1];
+    const clampToDomain = (t) => Math.min(domain[1], Math.max(domain[0], t));
+    const ft = asNum(get('FunctionType'));
+
+    if (ft === 2) {
+      const C0 = numArr(get('C0')) || [0];
+      const C1 = numArr(get('C1')) || [1];
+      const N = asNum(get('N')) || 1;
+      return (input) => {
+        const t = clampToDomain(input);
+        const tp = Math.pow(t, N);
+        return C0.map((c0, i) => c0 + tp * ((C1[i] != null ? C1[i] : 1) - c0));
+      };
+    }
+
+    if (ft === 3) {
+      const fns = resolve(get('Functions'));
+      const bounds = numArr(get('Bounds')) || [];
+      const encode = numArr(get('Encode')) || [];
+      if (!(fns instanceof PDFArray)) throw new Error('bad stitching function');
+      const subFns = [];
+      for (let i = 0; i < fns.size(); i++) subFns.push(compilePdfFunction(fns.get(i), resolve, lib));
+      return (input) => {
+        const t = clampToDomain(input);
+        let k = 0;
+        while (k < bounds.length && t >= bounds[k]) k++;
+        const lo = k === 0 ? domain[0] : bounds[k - 1];
+        const hi = k === bounds.length ? domain[1] : bounds[k];
+        const e0 = encode[2 * k] != null ? encode[2 * k] : 0;
+        const e1 = encode[2 * k + 1] != null ? encode[2 * k + 1] : 1;
+        const te = hi > lo ? e0 + ((t - lo) / (hi - lo)) * (e1 - e0) : e0;
+        return subFns[k](te);
+      };
+    }
+
+    if (ft === 0) {
+      if (!(fn instanceof PDFRawStream)) throw new Error('type0 needs a stream');
+      const size = numArr(get('Size'));
+      const bitsPerSample = asNum(get('BitsPerSample'));
+      const range = numArr(get('Range'));
+      if (!size || size.length !== 1 || !range || !bitsPerSample) throw new Error('unsupported type0 shape');
+      const encode = numArr(get('Encode')) || [0, size[0] - 1];
+      const decodeArr = numArr(get('Decode')) || range;
+      const nOut = range.length / 2;
+      const data = decodePDFRawStream(fn).decode();               // decompressed ONCE
+      const maxVal = Math.pow(2, bitsPerSample) - 1;
+
+      const readSample = (sampleIdx, outIdx) => {
+        const bitOffset = (sampleIdx * nOut + outIdx) * bitsPerSample;
+        if (bitsPerSample === 8) return data[bitOffset / 8];
+        if (bitsPerSample === 16) { const o = bitOffset / 8; return (data[o] << 8) | data[o + 1]; }
+        let byteOff = Math.floor(bitOffset / 8), bitOff = bitOffset % 8, val = 0, bitsLeft = bitsPerSample;
+        while (bitsLeft > 0) {
+          const avail = 8 - bitOff, take = Math.min(avail, bitsLeft);
+          const chunk = (data[byteOff] >> (avail - take)) & ((1 << take) - 1);
+          val = (val << take) | chunk;
+          bitsLeft -= take; bitOff += take;
+          if (bitOff >= 8) { bitOff = 0; byteOff++; }
+        }
+        return val;
+      };
+
+      return (input) => {
+        const t = clampToDomain(input);
+        const e = encode[0] + ((t - domain[0]) / (domain[1] - domain[0] || 1)) * (encode[1] - encode[0]);
+        const ec = Math.min(size[0] - 1, Math.max(0, e));
+        const i0 = Math.floor(ec), i1 = Math.min(size[0] - 1, i0 + 1), frac = ec - i0;
+        const out = [];
+        for (let o = 0; o < nOut; o++) {
+          const s0 = readSample(i0, o) / maxVal, s1 = readSample(i1, o) / maxVal;
+          const s = s0 + frac * (s1 - s0);
+          out.push(decodeArr[2 * o] + s * (decodeArr[2 * o + 1] - decodeArr[2 * o]));
+        }
+        return out;
+      };
+    }
+
+    if (ft === 4) {
+      if (!(fn instanceof PDFRawStream)) throw new Error('type4 needs a stream');
+      const src = new TextDecoder('latin1').decode(decodePDFRawStream(fn).decode());
+      const program = parsePostScriptProgram(src);                // parsed ONCE
+      return (input) => runPostScriptProgram(program, [clampToDomain(input)]);
+    }
+
+    throw new Error('unsupported function type ' + ft);
+  }
+
+  /** Tokenize + parse a Type 4 (PostScript calculator) function body once. */
+  function parsePostScriptProgram(src) {
+    const toks = src.match(/\{|\}|[^\s{}]+/g) || [];
+    let pos = 0;
+    const parseBlock = () => {
+      if (toks[pos] !== '{') throw new Error('expected {');
+      pos++;
+      const body = [];
+      while (toks[pos] !== '}') {
+        if (pos >= toks.length) throw new Error('unterminated block');
+        body.push(toks[pos] === '{' ? parseBlock() : toks[pos++]);
+      }
+      pos++;
+      return body;
+    };
+    return parseBlock();
+  }
+
+  /** Run a pre-parsed PostScript calculator program (PDF function Type 4).
+   *  No loop construct exists in this grammar (only if/ifelse), so a step
+   *  counter is just a defensive belt-and-suspenders cap, not a real guard. */
+  function runPostScriptProgram(program, inputs) {
+    const stack = inputs.slice();
+    let steps = 0;
+    const NUM_RE = /^[+-]?(\d+\.?\d*|\.\d+)$/;
+    const exec = (body) => {
+      for (const tk of body) {
+        if (++steps > 20000) throw new Error('step limit exceeded');
+        if (Array.isArray(tk)) { stack.push(tk); continue; }
+        if (NUM_RE.test(tk)) { stack.push(parseFloat(tk)); continue; }
+        switch (tk) {
+          case 'add': { const b = stack.pop(), a = stack.pop(); stack.push(a + b); break; }
+          case 'sub': { const b = stack.pop(), a = stack.pop(); stack.push(a - b); break; }
+          case 'mul': { const b = stack.pop(), a = stack.pop(); stack.push(a * b); break; }
+          case 'div': { const b = stack.pop(), a = stack.pop(); stack.push(a / b); break; }
+          case 'idiv': { const b = stack.pop(), a = stack.pop(); stack.push((a / b) | 0); break; }
+          case 'mod': { const b = stack.pop(), a = stack.pop(); stack.push(a % b); break; }
+          case 'neg': stack.push(-stack.pop()); break;
+          case 'abs': stack.push(Math.abs(stack.pop())); break;
+          case 'sqrt': stack.push(Math.sqrt(stack.pop())); break;
+          case 'sin': stack.push(Math.sin(stack.pop() * Math.PI / 180)); break;
+          case 'cos': stack.push(Math.cos(stack.pop() * Math.PI / 180)); break;
+          case 'atan': { const b = stack.pop(), a = stack.pop(); let d = Math.atan2(a, b) * 180 / Math.PI; if (d < 0) d += 360; stack.push(d); break; }
+          case 'exp': { const b = stack.pop(), a = stack.pop(); stack.push(Math.pow(a, b)); break; }
+          case 'ln': stack.push(Math.log(stack.pop())); break;
+          case 'log': stack.push(Math.log10(stack.pop())); break;
+          case 'ceiling': stack.push(Math.ceil(stack.pop())); break;
+          case 'floor': stack.push(Math.floor(stack.pop())); break;
+          case 'round': stack.push(Math.round(stack.pop())); break;
+          case 'truncate': stack.push(Math.trunc(stack.pop())); break;
+          case 'cvi': stack.push(stack.pop() | 0); break;
+          case 'cvr': break;
+          case 'dup': stack.push(stack[stack.length - 1]); break;
+          case 'pop': stack.pop(); break;
+          case 'exch': { const b = stack.pop(), a = stack.pop(); stack.push(b, a); break; }
+          case 'copy': { const n = stack.pop(); const s = stack.slice(stack.length - n); for (const v of s) stack.push(v); break; }
+          case 'index': { const n = stack.pop(); stack.push(stack[stack.length - 1 - n]); break; }
+          case 'roll': {
+            const j = stack.pop(), n = stack.pop();
+            if (n > 0) {
+              const part = stack.splice(stack.length - n, n);
+              const shift = ((j % n) + n) % n;
+              stack.push(...part.slice(n - shift).concat(part.slice(0, n - shift)));
+            }
+            break;
+          }
+          case 'eq': { const b = stack.pop(), a = stack.pop(); stack.push(a === b); break; }
+          case 'ne': { const b = stack.pop(), a = stack.pop(); stack.push(a !== b); break; }
+          case 'gt': { const b = stack.pop(), a = stack.pop(); stack.push(a > b); break; }
+          case 'ge': { const b = stack.pop(), a = stack.pop(); stack.push(a >= b); break; }
+          case 'lt': { const b = stack.pop(), a = stack.pop(); stack.push(a < b); break; }
+          case 'le': { const b = stack.pop(), a = stack.pop(); stack.push(a <= b); break; }
+          case 'and': { const b = stack.pop(), a = stack.pop(); stack.push(typeof a === 'boolean' ? (a && b) : (a & b)); break; }
+          case 'or': { const b = stack.pop(), a = stack.pop(); stack.push(typeof a === 'boolean' ? (a || b) : (a | b)); break; }
+          case 'not': { const a = stack.pop(); stack.push(typeof a === 'boolean' ? !a : ~a); break; }
+          case 'xor': { const b = stack.pop(), a = stack.pop(); stack.push(typeof a === 'boolean' ? (a !== b) : (a ^ b)); break; }
+          case 'bitshift': { const s = stack.pop(), a = stack.pop(); stack.push(s >= 0 ? (a << s) : (a >> -s)); break; }
+          case 'true': stack.push(true); break;
+          case 'false': stack.push(false); break;
+          case 'if': { const proc = stack.pop(), cond = stack.pop(); if (cond) exec(proc); break; }
+          case 'ifelse': { const proc2 = stack.pop(), proc1 = stack.pop(), cond = stack.pop(); exec(cond ? proc1 : proc2); break; }
+          default: throw new Error('unsupported PostScript op: ' + tk);
+        }
+      }
+    };
+    exec(program);
+    return stack;
+  }
+
   function hexToRgb(hex) {
     const h = (hex || '#000000').replace('#', '');
     return {
@@ -34,6 +236,10 @@
       g: parseInt(h.substring(2, 4), 16) / 255,
       b: parseInt(h.substring(4, 6), 16) / 255
     };
+  }
+
+  function cmykToRgb(c, m, y, k) {
+    return [(1 - c) * (1 - k), (1 - m) * (1 - k), (1 - y) * (1 - k)];
   }
 
   function normalizeTheme(id, name, bgHex, textHex, objHex) {
@@ -197,6 +403,7 @@
 
       // ---- colour-space classification, memoised per Resources dict
       const csCache = new Map();
+      const lib = this._getPDFLib();
       const classify = (def) => {
         if (def instanceof PDFName) {
           const n = def.toString();
@@ -215,8 +422,36 @@
           }
           if (fam === '/CalGray') return 'gray';
           if (fam === '/CalRGB') return 'rgb';
+
+          // Separation / single-colorant DeviceN: normally left alone (an
+          // arbitrary spot ink's true colour isn't guessable from its name),
+          // but its tint-transform function IS a real, evaluable formula —
+          // resolve it into a concrete RGB-producing function instead of
+          // skipping outright. Any unsupported function shape/type falls
+          // back to 'skip', same as before.
+          if ((fam === '/Separation' || fam === '/DeviceN') && def.size() >= 4) {
+            try {
+              const names = resolve(def.get(1));
+              const nColorants = fam === '/Separation' ? 1 : (names instanceof PDFArray ? names.size() : 0);
+              if (nColorants !== 1) return 'skip';             // multi-ink DeviceN: out of scope
+              const altSpace = classify(resolve(def.get(2)));
+              if (altSpace !== 'gray' && altSpace !== 'rgb' && altSpace !== 'cmyk') return 'skip';
+              // compiled ONCE per colourspace (decompress + parse happen here,
+              // not per colour operator) and probed so a broken function
+              // falls back to 'skip' up front, never mid-stream
+              const compiled = compilePdfFunction(def.get(3), resolve, lib);
+              compiled(0.5);
+              const evaluate = (t) => {
+                const out = compiled(t);
+                if (altSpace === 'gray') { const v = out[0]; return [v, v, v]; }
+                if (altSpace === 'cmyk') return cmykToRgb(out[0], out[1], out[2], out[3]);
+                return [out[0], out[1], out[2]];
+              };
+              return { evaluate };
+            } catch (e) { return 'skip'; }
+          }
         }
-        return 'skip';                                        // Indexed / Separation / DeviceN / Lab / unknown
+        return 'skip';                                        // Indexed / DeviceN(multi) / Lab / unknown
       };
       const colorSpaceMap = (res) => {
         res = resolve(res);
