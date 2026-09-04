@@ -288,13 +288,14 @@
   async function runPreview() {
     if (!state.srcDoc || !state.originalBytes) return;
     const token = ++previewToken;
+    const targetPage = state.currentPage;   // tag the result with the page it's actually FOR, not whatever's current when it lands
     try {
       const mini = await window.PDFLib.PDFDocument.create();
-      const [pg] = await mini.copyPages(state.srcDoc, [Math.max(0, state.currentPage - 1)]);
+      const [pg] = await mini.copyPages(state.srcDoc, [Math.max(0, targetPage - 1)]);
       mini.addPage(pg);
       const res = await converter.convert(await mini.save(), { engine: state.activeEngine, pageRange: 'All' });
       if (token !== previewToken) return;
-      await viewer.setDarkDocument(res.pdfBytes, true);
+      await viewer.setDarkDocument(res.pdfBytes, true, targetPage);
     } catch (e) {
       console.warn('preview conversion failed', e);
     }

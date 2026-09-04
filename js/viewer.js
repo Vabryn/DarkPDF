@@ -21,6 +21,7 @@
       this.pdfDoc = null;        // original (light)
       this.darkDoc = null;       // converted (dark)
       this.darkIsPreview = false;
+      this.darkPreviewForPage = null;   // which real page a preview darkDoc stands in for
 
       this.currentPage = 1;
       this.totalPages = 0;
@@ -260,7 +261,13 @@
       return { numPages: this.totalPages };
     }
 
-    async setDarkDocument(bytes, isPreview) {
+    // `forPage` is the real page number a PREVIEW document represents (it's
+    // always a 1-page mini-doc, page 1 of it standing in for that one real
+    // page). Without tracking that, _doRender's `min(currentPage, numPages)`
+    // silently clamped to page 1 for ANY current page once the user had
+    // navigated past the page the preview was built for -- showing light and
+    // dark sides for two different pages until the next preview caught up.
+    async setDarkDocument(bytes, isPreview, forPage) {
       this._configurePdfJs();
       const token = ++this._renderToken;
       let doc;
@@ -270,6 +277,7 @@
       if (this.darkDoc) { try { await this.darkDoc.destroy(); } catch (e) {} }
       this.darkDoc = doc;
       this.darkIsPreview = !!isPreview;
+      this.darkPreviewForPage = isPreview ? (forPage || this.currentPage) : null;
       this.renderCurrentPage();
     }
 
@@ -357,13 +365,20 @@
       await this._paint('_lightTask', this.canvasLight, page, tf, token);
       if (token !== this._renderToken) return;
 
-      if (this.darkDoc) {
-        const dpage = await this.darkDoc.getPage(Math.min(this.currentPage, this.darkDoc.numPages));
+      // A preview darkDoc is a 1-page mini-doc standing in for whichever page
+      // it was built for — only usable while that's still the current page.
+      // Using it for any OTHER page (a stale preview mid-navigation) would
+      // silently show the wrong page's content on the dark side, so treat it
+      // as "not ready" instead — the neutral placeholder below is honest,
+      // and the next preview or full pass corrects it as soon as it lands.
+      const darkUsable = this.darkDoc && (!this.darkIsPreview || this.darkPreviewForPage === this.currentPage);
+      if (darkUsable) {
+        const dpage = await this.darkDoc.getPage(this.darkIsPreview ? 1 : Math.min(this.currentPage, this.darkDoc.numPages));
         if (token !== this._renderToken) return;
         await this._paint('_darkTask', this.canvasDark, dpage, tf, token);
         if (token !== this._renderToken) return;
       } else {
-        // no converted doc yet — neutral dark placeholder so the split isn't blank
+        // no MATCHING converted doc yet — neutral dark placeholder so the split isn't blank or wrong
         this.canvasDark.width = Math.floor(w * ratio);
         this.canvasDark.height = Math.floor(h * ratio);
         const c = this.canvasDark.getContext('2d');
