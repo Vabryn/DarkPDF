@@ -57,7 +57,7 @@
             <div class="split-slider" id="splitSlider" role="slider" aria-label="Compare original vs converted" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" title="Drag to compare original vs converted">
               <div class="slider-line"></div>
               <div class="slider-handle">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>
               </div>
             </div>
             <div class="view-badge light-badge" id="lightBadge">Original Light</div>

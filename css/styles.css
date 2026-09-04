@@ -799,8 +799,12 @@ kbd {
 }
 
 .slider-handle {
-  width: 20px;
-  height: 20px;
+  position: absolute;
+  top: 25%;                     /* raised from vertical center (50%) */
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 25px;
+  height: 25px;
   border-radius: 50%;
   background: #000000;
   border: 1px solid rgba(255, 255, 255, 0.9);
@@ -815,7 +819,7 @@ kbd {
 }
 
 .split-slider:hover .slider-handle {
-  transform: scale(1.15);
+  transform: translate(-50%, -50%) scale(1.15);
 }
 
 .handle-icon {
