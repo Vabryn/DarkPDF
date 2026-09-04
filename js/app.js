@@ -342,21 +342,27 @@
 
   function showHeaderProgress() {
     els.headerProgress.hidden = false;
-    els.headerProgress.classList.remove('is-complete');
+    els.headerProgress.classList.remove('is-complete', 'is-fading');
     els.btnRenderRemainder.hidden = true;
     setHeaderProgress(2);
   }
   function setHeaderProgress(pct) {
     els.headerProgressFill.style.width = Math.max(2, Math.min(100, pct)) + '%';
   }
+  // 100% -> brief glow pulse + sparkle (.is-complete) -> the fill melts back
+  // to transparent (.is-fading), same colour as the header, so it disappears
+  // instead of sitting there as a spent white pill.
   function finishHeaderProgress(wasCapped) {
     setHeaderProgress(100);
     els.headerProgress.classList.add('is-complete');
-    if (wasCapped && state.pageCount > PAGE_CAP) {
-      els.btnRenderRemainder.hidden = false;               // more pages waiting, offer to continue
-    } else {
-      setTimeout(() => { els.headerProgress.hidden = true; }, 600);
-    }
+    setTimeout(() => {
+      els.headerProgress.classList.add('is-fading');
+      if (wasCapped && state.pageCount > PAGE_CAP) {
+        els.btnRenderRemainder.hidden = false;              // more pages waiting, offer to continue
+      } else {
+        setTimeout(() => { els.headerProgress.hidden = true; }, 500);
+      }
+    }, 700);
   }
   function hideHeaderProgress() { els.headerProgress.hidden = true; }
 
