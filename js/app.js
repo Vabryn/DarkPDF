@@ -481,7 +481,7 @@
   /* ---- load / setup ---- */
   async function loadPdfFile(file) {
     try {
-      showProgress('Reading PDF document...', 15);
+      showProgress('Reading PDF document...');
       state.fileName = file.name;
       state.fileSize = file.size;
       state.originalBytes = new Uint8Array(await file.arrayBuffer());
@@ -499,7 +499,7 @@
     els.workspace.style.display = 'flex';
     els.docTitle.textContent = state.fileName;
     els.docMeta.textContent = fmtSize(state.fileSize);
-    showProgress('Rendering document...', 45);
+    showProgress('Rendering document...');
 
     try {
       state.srcDoc = await window.PDFLib.PDFDocument.load(state.originalBytes.slice(), { ignoreEncryption: true, updateMetadata: false });
@@ -537,7 +537,7 @@
 
   async function loadDemoPdf() {
     try {
-      showProgress('Building sample PDF...', 20);
+      showProgress('Building sample PDF...');
       const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
       const doc = await PDFDocument.create();
       const F = await doc.embedFont(StandardFonts.Helvetica);
@@ -665,11 +665,17 @@
     }
   }
 
+  // Omit `pct` for phases with no measurable progress (initial PDF parse /
+  // first render) — the modal shows pulsing dots instead of a fake bar.
   function showProgress(msg, pct) {
     els.progressModal.classList.add('visible');
     els.progressStatus.textContent = msg;
-    els.progressBar.style.width = `${pct}%`;
-    els.progressPercent.textContent = `${Math.round(pct)}%`;
+    const indeterminate = (pct == null);
+    els.progressModal.classList.toggle('indeterminate', indeterminate);
+    if (!indeterminate) {
+      els.progressBar.style.width = `${pct}%`;
+      els.progressPercent.textContent = `${Math.round(pct)}%`;
+    }
   }
   const hideProgress = () => els.progressModal.classList.remove('visible');
 
