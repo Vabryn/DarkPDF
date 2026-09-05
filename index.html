@@ -133,16 +133,10 @@
           <input type="text" id="pageRangeInput" class="clean-input" placeholder="All" title="e.g. All, or 1-5, 8">
         </div>
         <div class="pager-cluster">
-          <button id="btnPrevPage" class="btn-icon-sub" title="Previous page (←)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
-          </button>
           <div class="pager-input-wrap">
             <input type="number" id="pageInput" class="pager-input" min="1" value="1">
             <span id="pageTotalDisplay" class="pager-total">/ 1</span>
           </div>
-          <button id="btnNextPage" class="btn-icon-sub" title="Next page (→)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
-          </button>
         </div>
       </div>
     </div>
@@ -240,7 +234,15 @@
       </div>
     </aside>
 
-    <div class="stage-viewport"><div id="viewerContainer"></div></div>
+    <div class="stage-viewport">
+      <div id="viewerContainer"></div>
+      <button id="btnPrevPage" class="page-nav-arrow page-nav-prev" title="Previous page (←)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button id="btnNextPage" class="page-nav-arrow page-nav-next" title="Next page (→)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
   </main>
 
   <!-- Progress Modal -->

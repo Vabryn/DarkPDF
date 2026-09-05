@@ -818,6 +818,47 @@ kbd {
   display: flex;
   align-items: flex-start;        /* anchor the page near the top, not mid-pane */
   padding: 18px 16px 32px;
+  position: relative;
+}
+
+/* Prev/next page arrows, docked to the left/right edges of the reading pane
+   itself (not the page — the page's own width changes with zoom) and fixed
+   in place so they stay put while a zoomed-in page scrolls underneath them. */
+.page-nav-arrow {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 20, 24, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-secondary);
+  cursor: pointer;
+  z-index: 60;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.page-nav-arrow:hover:not(:disabled) {
+  background: rgba(32, 32, 38, 0.85);
+  color: var(--text-pure);
+  border-color: var(--border-hover);
+}
+.page-nav-arrow:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+.page-nav-prev { left: 20px; }
+.page-nav-next { right: 20px; }
+
+@media (max-width: 640px) {
+  .page-nav-arrow { width: 34px; height: 34px; }
+  .page-nav-prev { left: 8px; }
+  .page-nav-next { right: 8px; }
 }
 
 /* the page wrapper is the flex item — `margin: 0 auto` centres it horizontally
@@ -1139,7 +1180,6 @@ kbd {
   align-items: center;
 }
 .workspace-subnav .clean-input { display: inline-block; line-height: 26px; }
-.pager-cluster .btn-icon-sub { width: 28px; height: 28px; box-sizing: border-box; }
 .pager-cluster .pager-input { padding: 0 4px; }
 
 /* zoom bar: 24px buttons, matched */
