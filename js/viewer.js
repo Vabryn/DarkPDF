@@ -301,20 +301,21 @@
     }
 
     /**
-     * Paint one page onto one canvas. Renders to an OFF-SCREEN canvas first,
-     * then blits the finished frame onto the visible canvas in a single sync
-     * op — the visible canvas never shows a cleared / half-drawn state, so
-     * there is no flash when zooming or re-converting. Any prior task on this
-     * slot is cancelled AND awaited before the new one starts.
+     * Render one page to an OFF-SCREEN canvas and return the finished frame
+     * WITHOUT touching the visible canvas. The caller blits every frame it
+     * asked for together (see _doRender), so the light and dark halves swap
+     * to the new page in the same tick with no visible desync. Any prior
+     * task on this slot is cancelled AND awaited before the new one starts.
+     * Returns null if cancelled / superseded.
      */
-    async _paint(slot, canvas, page, tf, token) {
+    async _renderOffscreen(slot, page, tf, token) {
       const prev = this[slot];
       if (prev) {
         try { prev.cancel(); } catch (e) {}
         try { await prev.promise; } catch (e) {}
         if (this[slot] === prev) this[slot] = null;
       }
-      if (token !== this._renderToken) return;
+      if (token !== this._renderToken) return null;
 
       const vp = page.getViewport({ scale: this.zoomScale });
       const dw = Math.max(1, Math.floor(vp.width * tf[0]));
@@ -329,21 +330,21 @@
         await task.promise;
       } catch (e) {
         if (this[slot] === task) this[slot] = null;
-        return;                                   // cancelled / superseded — keep the current frame
+        return null;                              // cancelled / superseded — keep the current frame
       }
       if (this[slot] === task) this[slot] = null;
-      if (token !== this._renderToken) return;
+      if (token !== this._renderToken) return null;
+      return { off, dw, dh };
+    }
 
-      // Resize + blit happen in the same tick: no flash. CSS keeps the canvas
-      // at 100% of its container (see .pdf-canvas) instead of an explicit px
-      // size — light and dark repaint on separate awaits, so whichever one
-      // hasn't finished yet would otherwise sit at its old pixel size inside
-      // an already-resized stage, exposing the white page background in the
-      // gap. At 100% it always fills the stage (stretching its stale bitmap
-      // for the instant before its own repaint lands), so there is never a gap.
-      canvas.width = dw;
-      canvas.height = dh;
-      canvas.getContext('2d').drawImage(off, 0, 0);
+    // Resize + blit in one synchronous op: the visible canvas never shows a
+    // cleared / half-drawn state. CSS keeps the canvas at 100% of its
+    // container (see .pdf-canvas), so even between two back-to-back blits
+    // neither half exposes the page background.
+    _blit(canvas, frame) {
+      canvas.width = frame.dw;
+      canvas.height = frame.dh;
+      canvas.getContext('2d').drawImage(frame.off, 0, 0);
     }
 
     async _doRender(token) {
@@ -363,26 +364,36 @@
       this.stage.style.width = `${w}px`;
       this.stage.style.height = `${h}px`;
 
-      await this._paint('_lightTask', this.canvasLight, page, tf, token);
-      if (token !== this._renderToken) return;
-
       // A preview darkDoc is a 1-page mini-doc standing in for whichever page
       // it was built for — only usable while that's still the current page.
       // Using it for any OTHER page (a stale preview mid-navigation) would
       // silently show the wrong page's content on the dark side.
       const darkUsable = this.darkDoc && (!this.darkIsPreview || this.darkPreviewForPage === this.currentPage);
+      let darkPage = null;
       if (darkUsable) {
-        const dpage = await this.darkDoc.getPage(this.darkIsPreview ? 1 : Math.min(this.currentPage, this.darkDoc.numPages));
+        darkPage = await this.darkDoc.getPage(this.darkIsPreview ? 1 : Math.min(this.currentPage, this.darkDoc.numPages));
         if (token !== this._renderToken) return;
-        await this._paint('_darkTask', this.canvasDark, dpage, tf, token);
-        if (token !== this._renderToken) return;
+      }
+
+      // Render both halves off-screen at the same time, then blit them in one
+      // synchronous block — the light and dark sides always swap to the new
+      // page together, with no frame where one is ahead of the other.
+      const [lightFrame, darkFrame] = await Promise.all([
+        this._renderOffscreen('_lightTask', page, tf, token),
+        darkUsable ? this._renderOffscreen('_darkTask', darkPage, tf, token) : Promise.resolve(null)
+      ]);
+      if (token !== this._renderToken) return;
+
+      if (lightFrame) this._blit(this.canvasLight, lightFrame);
+      if (darkFrame) {
+        this._blit(this.canvasDark, darkFrame);
         this._darkEverPainted = true;
-      } else if (!this._darkEverPainted) {
+      } else if (!darkUsable && !this._darkEverPainted) {
         // Very first page, before the first preview has landed: a neutral fill
         // so the dark half isn't a white flash. Once a real dark frame has been
         // painted we never blank it again — the previous page's dark render
-        // stays visible for the ~tens of ms until this page's does, which reads
-        // as a normal page turn rather than a black gap.
+        // stays visible until this page's does, which reads as a normal page
+        // turn rather than a black gap.
         this.canvasDark.width = Math.floor(w * ratio);
         this.canvasDark.height = Math.floor(h * ratio);
         const c = this.canvasDark.getContext('2d');
