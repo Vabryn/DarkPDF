@@ -183,10 +183,6 @@ body {
   .header-progress.is-complete .header-progress-fill::before { animation: none; opacity: 0; }
 }
 
-@media (max-width: 640px) {
-  .header-progress-track { width: 90px; }
-}
-
 .header-status {
   display: flex;
   align-items: center;
@@ -537,7 +533,7 @@ kbd {
   font-size: 12px;
 }
 
-.subnav-left, .subnav-right {
+.subnav-left {
   display: flex;
   align-items: center;
   gap: 10px 14px;
@@ -589,18 +585,6 @@ kbd {
 
 .clean-input:focus {
   border-color: var(--border-hover);
-}
-
-.pager-cluster {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.pager-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .pager-input {
@@ -856,10 +840,39 @@ kbd {
 .page-nav-prev { left: 20px; }
 .page-nav-next { right: 20px; }
 
+/* Floating page indicator — bottom-centre of the reading pane, same glass
+   treatment as the prev/next arrows, fixed so it stays put while a zoomed
+   page scrolls underneath it. */
+.page-pill {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(24, 24, 28, 0.85);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--border-hover);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  z-index: 60;
+}
+.page-pill .pager-input {
+  width: 46px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-pure);
+  padding: 3px 4px;
+}
+.page-pill .pager-total { font-size: 12px; color: var(--text-secondary); }
+
 @media (max-width: 640px) {
   .page-nav-arrow { width: 34px; height: 34px; }
   .page-nav-prev { left: 8px; }
   .page-nav-next { right: 8px; }
+  .page-pill { bottom: 14px; }
 }
 
 /* the page wrapper is the flex item — `margin: 0 auto` centres it horizontally
@@ -1130,7 +1143,7 @@ kbd {
    -------------------------------------------------------------------------- */
 @media (max-width: 900px) {
   .chip-filename { max-width: 34vw; }
-  .subnav-left, .subnav-right { gap: 8px 10px; }
+  .subnav-left { gap: 8px 10px; }
 }
 
 @media (max-width: 768px) {
@@ -1139,8 +1152,26 @@ kbd {
   .studio-drawer { width: 100%; right: -100%; }
   .zoom-bar #zoomSlider { width: 62vw; }
   .workspace-nav, .workspace-subnav { padding-left: 10px; padding-right: 10px; }
-  /* stack the three clusters full-width so nothing is clipped */
-  .workspace-nav { justify-content: center; }
+
+  /* The "Secure. Private." label is hidden here, freeing the right side of
+     the header. Take the progress bar out of the absolutely-centred slot so
+     it flows right after the wordmark and spans that space instead of
+     sitting as a short stub over the title. */
+  .header-progress {
+    position: static;
+    transform: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 24px;
+    justify-content: flex-end;
+  }
+  .header-progress-track { width: 100%; max-width: 320px; }
+
+  /* Wrapped rows fill the width edge-to-edge rather than floating centred
+     with big side gutters. Same controls, same sizes — just spread out. */
+  .workspace-nav { justify-content: space-between; }
+  .nav-cluster-left, .nav-cluster-right { flex: 1 1 auto; }
+  .nav-cluster-right { justify-content: flex-end; }
   .segmented-control { order: 3; }
 }
 
@@ -1218,20 +1249,12 @@ kbd {
 
 /* sub-toolbar: 28px controls */
 .workspace-subnav .clean-select,
-.workspace-subnav .clean-input,
-.workspace-subnav #btnToggleStudio,
-.pager-cluster .pager-input {
+.workspace-subnav #btnToggleStudio {
   height: 28px;
   box-sizing: border-box;
-}
-.workspace-subnav .clean-select,
-.workspace-subnav .clean-input,
-.workspace-subnav #btnToggleStudio {
   display: inline-flex;
   align-items: center;
 }
-.workspace-subnav .clean-input { display: inline-block; line-height: 26px; }
-.pager-cluster .pager-input { padding: 0 4px; }
 
 /* zoom bar: 24px buttons, matched */
 .zoom-bar .btn-tag {

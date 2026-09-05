@@ -127,18 +127,6 @@
         </div>
       </div>
 
-      <div class="subnav-right">
-        <div class="input-wrapper">
-          <span class="field-label">Pages</span>
-          <input type="text" id="pageRangeInput" class="clean-input" placeholder="All" title="e.g. All, or 1-5, 8">
-        </div>
-        <div class="pager-cluster">
-          <div class="pager-input-wrap">
-            <input type="number" id="pageInput" class="pager-input" min="1" value="1">
-            <span id="pageTotalDisplay" class="pager-total">/ 1</span>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Zoom bar (centered) -->
@@ -242,6 +230,10 @@
       <button id="btnNextPage" class="page-nav-arrow page-nav-next" title="Next page (→)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
       </button>
+      <div class="page-pill">
+        <input type="number" id="pageInput" class="pager-input" min="1" value="1" aria-label="Current page">
+        <span id="pageTotalDisplay" class="pager-total">/ 1</span>
+      </div>
     </div>
   </main>
 

@@ -31,7 +31,7 @@
     'uploadSection', 'dropZone', 'fileInput', 'btnUpload', 'btnDemo',
     'workspace', 'viewerContainer',
     'docTitle', 'docMeta', 'btnNewDoc', 'btnOpenDoc', 'btnDownload', 'sizeChip',
-    'themeSelect', 'btnToggleStudio', 'engineSelect', 'pageRangeInput',
+    'themeSelect', 'btnToggleStudio', 'engineSelect',
     'zoomSlider', 'zoomVal', 'btnZoomReset', 'btnZoomFill',
     'btnPrevPage', 'btnNextPage', 'pageInput', 'pageTotalDisplay',
     'colorStudioDrawer', 'btnCloseStudio', 'btnResetStudio',
@@ -177,7 +177,6 @@
       invalidateConversion();
       scheduleRefresh();
     });
-    els.pageRangeInput.addEventListener('change', () => { invalidateConversion(); scheduleRefresh(); });
 
     document.querySelectorAll('.seg-btn').forEach((btn) => btn.addEventListener('click', () => {
       document.querySelectorAll('.seg-btn').forEach((b) => b.classList.remove('active'));
@@ -383,7 +382,7 @@
   async function runFull(explicitRange) {
     if (!state.originalBytes) return;
     const token = ++fullToken;
-    const range = explicitRange || (els.pageRangeInput.value || '').trim() || 'All';
+    const range = explicitRange || 'All';   // export always covers the whole document
     showHeaderProgress();
     try {
       // Off the main thread: a large document's final PDFDocument.save() is a
@@ -634,7 +633,7 @@
   async function exportPdf() {
     if (!state.originalBytes) return;
     try {
-      const range = (els.pageRangeInput.value || '').trim() || 'All';
+      const range = 'All';
       let bytes = state.convertedBytes;
       if (!state.conversionFresh || state.conversionRange !== range || !bytes) {
         showProgress('Converting...', 5);
