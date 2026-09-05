@@ -10,7 +10,7 @@
   --bg-card: #17171c;
   --bg-drawer: rgba(20, 20, 24, 0.9);
 
-  --border-hairline: rgba(255, 255, 255, 0.08);
+  --border-hairline: rgba(255, 255, 255, 0.14);
   --border-hover: rgba(255, 255, 255, 0.17);
   --border-focus: #3b82f6;
   
@@ -364,8 +364,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -385,8 +385,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-xs);
   cursor: pointer;
@@ -404,8 +404,8 @@ body {
 }
 
 .btn-tag {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-xs);
   padding: 3px 7px;
@@ -834,11 +834,12 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(20, 20, 24, 0.7);
+  background: rgba(24, 24, 28, 0.85);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  border: 1px solid var(--border-hairline);
-  color: var(--text-secondary);
+  border: 1px solid var(--border-hover);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  color: var(--text-pure);
   cursor: pointer;
   z-index: 60;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
