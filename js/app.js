@@ -40,7 +40,7 @@
     'sliderTextContrast', 'valTextContrast', 'sliderTextWarmth', 'valTextWarmth',
     'studioObjColor', 'studioObjHex', 'studioObjMode', 'sliderObjSaturation', 'valObjSaturation',
     'sliderObjBorder', 'valObjBorder',
-    'progressModal', 'progressBar', 'progressPercent', 'progressStatus',
+    'progressModal', 'progressBar', 'progressPercent', 'progressStatus', 'btnCancelProgress',
     'headerProgress', 'headerProgressFill'
   ].forEach((id) => { els[id] = document.getElementById(id); });
 
@@ -164,6 +164,8 @@
 
     els.btnToggleStudio.addEventListener('click', () => els.colorStudioDrawer.classList.toggle('open'));
     els.btnCloseStudio.addEventListener('click', () => els.colorStudioDrawer.classList.remove('open'));
+
+    els.btnCancelProgress.addEventListener('click', () => { if (progressCancelFn) progressCancelFn(); });
 
     els.themeSelect.addEventListener('change', () => {
       converter.setTheme(els.themeSelect.value);
@@ -636,6 +638,8 @@
       let bytes = state.convertedBytes;
       if (!state.conversionFresh || state.conversionRange !== range || !bytes) {
         showProgress('Converting...', 5);
+        // the modal's 'x' — only meaningful for the worker (Standard) path
+        if (state.activeEngine !== 'scanned_canvas') setProgressCancellable(() => converter.abortWorker());
         // Off the main thread, same reasoning as runFull(): a full export on
         // a large document shouldn't freeze the modal's own progress updates
         // (or anything else) while pdf-lib's save() runs.
@@ -660,6 +664,7 @@
       toast('Saved converted dark PDF.', 'ok');
     } catch (err) {
       hideProgress();
+      if (err && (err.cancelled || err.superseded)) return;   // user hit 'x' / a newer run took over
       console.error(err);
       toast('Error exporting PDF: ' + err.message, 'error');
     }
@@ -677,7 +682,16 @@
       els.progressPercent.textContent = `${Math.round(pct)}%`;
     }
   }
-  const hideProgress = () => els.progressModal.classList.remove('visible');
+  // When set, the modal shows an 'x' that runs this to abort the running job.
+  let progressCancelFn = null;
+  function setProgressCancellable(fn) {
+    progressCancelFn = fn || null;
+    els.progressModal.classList.toggle('cancelable', !!fn);
+  }
+  const hideProgress = () => {
+    els.progressModal.classList.remove('visible', 'cancelable');
+    progressCancelFn = null;
+  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

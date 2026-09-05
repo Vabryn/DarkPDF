@@ -382,6 +382,25 @@
       });
     }
 
+    /**
+     * Stop an in-flight worker conversion at the user's request. Terminates
+     * the worker outright and rejects the pending convertInWorker() promise
+     * with a `cancelled` flag so the caller can tell a user abort apart from
+     * a real failure.
+     */
+    abortWorker() {
+      if (!this._worker) return;
+      try { this._worker.terminate(); } catch (e) {}
+      this._worker = null;
+      if (this._workerReject) {
+        const cancelled = new Error('Conversion cancelled.');
+        cancelled.cancelled = true;
+        const reject = this._workerReject;
+        this._workerReject = null;
+        reject(cancelled);
+      }
+    }
+
     /* ============ STANDARD — content-stream colour remap (lossless) ======== */
     async _convertStreamRemap(pdfBytes, onProgress, options) {
       const { PDFDocument, PDFName, PDFRef, PDFArray, PDFDict, PDFRawStream, PDFNumber, decodePDFRawStream } = this._getPDFLib();
