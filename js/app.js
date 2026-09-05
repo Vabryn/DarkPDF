@@ -442,7 +442,21 @@
       state.srcDoc = await window.PDFLib.PDFDocument.load(state.originalBytes.slice(), { ignoreEncryption: true, updateMetadata: false });
     } catch (e) { state.srcDoc = null; }
 
-    const info = await viewer.loadDocument(state.originalBytes.slice());
+    let info;
+    try {
+      info = await viewer.loadDocument(state.originalBytes.slice());
+    } catch (err) {
+      // Invalid/unreadable PDF: the workspace was already shown (pdf.js needs
+      // visible layout dimensions to compute its first fit), but there's
+      // nothing to show now -- back out to the upload screen instead of
+      // leaving an empty, broken workspace with no way forward but the
+      // manual back button.
+      els.workspace.style.display = 'none';
+      els.uploadSection.style.display = 'flex';
+      state.originalBytes = null;
+      state.srcDoc = null;
+      throw err;
+    }
     state.pageCount = info.numPages;
     state.currentPage = 1;
     els.pageTotalDisplay.textContent = `/ ${state.pageCount}`;
