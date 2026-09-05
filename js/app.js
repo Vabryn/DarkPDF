@@ -276,9 +276,14 @@
 
   /* ---- conversion scheduling ---- */
   const scheduleRefresh = () => { schedulePreview(); scheduleFull(); };
+  // A single-page preview conversion is small and independent of book size
+  // (~15-100ms depending on page complexity, see runPreview/runFull split
+  // above) -- a long debounce here just adds pure waiting on top of that.
+  // 60ms still coalesces the flood of 'input' events a slider drag fires
+  // into one conversion per settle point, without making the drag feel laggy.
   function schedulePreview() {
     clearTimeout(previewTimer);
-    previewTimer = setTimeout(runPreview, 200);
+    previewTimer = setTimeout(runPreview, 60);
   }
   function scheduleFull() {
     clearTimeout(fullTimer);
@@ -317,7 +322,14 @@
     const range = explicitRange || (els.pageRangeInput.value || '').trim() || 'All';
     showHeaderProgress();
     try {
-      const res = await converter.convert(state.originalBytes, {
+      // Off the main thread: a large document's final PDFDocument.save() is a
+      // single call pdf-lib can't yield inside, so running it in-page would
+      // freeze navigation and the live preview for however long that takes.
+      // Starting a new run here also CANCELS (worker.terminate()) whatever
+      // convertInWorker call is still in flight on this converter, which is
+      // exactly why its rejection is ignored below -- that's this call's own
+      // successor taking over, not a real failure.
+      const res = await converter.convertInWorker(state.originalBytes, {
         engine: state.activeEngine, pageRange: range,
         onProgress: (p) => { if (token === fullToken) setHeaderProgress(p.percent); }
       });
@@ -332,6 +344,7 @@
       await runRetention(res, token);
       finishHeaderProgress();
     } catch (e) {
+      if (e && e.superseded) return;   // a newer runFull() already took over
       hideHeaderProgress();
       console.error(e);
       toast('Conversion failed: ' + (e && e.message ? e.message : e), 'error');
@@ -546,7 +559,10 @@
       let bytes = state.convertedBytes;
       if (!state.conversionFresh || state.conversionRange !== range || !bytes) {
         showProgress('Converting...', 5);
-        const res = await converter.convert(state.originalBytes, {
+        // Off the main thread, same reasoning as runFull(): a full export on
+        // a large document shouldn't freeze the modal's own progress updates
+        // (or anything else) while pdf-lib's save() runs.
+        const res = await converter.convertInWorker(state.originalBytes, {
           engine: state.activeEngine, pageRange: range, onProgress: (p) => showProgress(p.message, p.percent)
         });
         bytes = res.pdfBytes;

@@ -317,6 +317,68 @@
       };
     }
 
+    /**
+     * Same result as convert(), but runs Standard-mode conversion in a Web
+     * Worker so a large document's PDFDocument.save() -- unyielding, can't
+     * be chunked -- never blocks the main thread. Scanned mode (needs
+     * canvas + pdf.js rendering) and environments without Worker support
+     * fall back to the normal in-page convert().
+     *
+     * Calling this again on the same instance CANCELS any still-running
+     * worker job outright (worker.terminate(), not a cooperative flag) --
+     * a superseded conversion stops immediately instead of burning CPU
+     * (and finishing a multi-second save()) for a result nobody will use.
+     */
+    convertInWorker(pdfBytes, options = {}) {
+      const engine = options.engine || this.currentEngine;
+      if (engine === 'scanned_canvas' || typeof Worker === 'undefined') {
+        return this.convert(pdfBytes, options);
+      }
+
+      if (this._worker) {
+        try { this._worker.terminate(); } catch (e) {}
+        if (this._workerReject) {
+          const superseded = new Error('Superseded by a newer conversion.');
+          superseded.superseded = true;
+          this._workerReject(superseded);
+        }
+        this._worker = null;
+        this._workerReject = null;
+      }
+
+      const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const onProgress = options.onProgress || (() => {});
+      const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice(0) : new Uint8Array(pdfBytes);
+      const worker = new Worker('js/converter.worker.js');
+      this._worker = worker;
+
+      return new Promise((resolve, reject) => {
+        this._workerReject = reject;
+        const settle = (fn, arg) => {
+          try { worker.terminate(); } catch (e) {}
+          if (this._worker === worker) { this._worker = null; this._workerReject = null; }
+          fn(arg);
+        };
+        worker.onmessage = (e) => {
+          const msg = e.data;
+          if (msg.type === 'progress') { onProgress({ stage: 'processing', percent: msg.percent, message: msg.message }); return; }
+          if (msg.type === 'done') {
+            settle(resolve, {
+              pdfBytes: msg.pdfBytes, pageCount: msg.pageCount, stats: msg.stats || {},
+              durationMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0)
+            });
+          } else if (msg.type === 'error') {
+            settle(reject, new Error(msg.message));
+          }
+        };
+        worker.onerror = (err) => settle(reject, new Error(err.message || 'Conversion worker failed.'));
+        worker.postMessage(
+          { pdfBytes: bytes, engine, pageRange: options.pageRange, customConfig: this.customConfig },
+          [bytes.buffer]
+        );
+      });
+    }
+
     /* ============ STANDARD — content-stream colour remap (lossless) ======== */
     async _convertStreamRemap(pdfBytes, onProgress, options) {
       const { PDFDocument, PDFName, PDFRef, PDFArray, PDFDict, PDFRawStream, PDFNumber, decodePDFRawStream } = this._getPDFLib();
