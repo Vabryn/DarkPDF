@@ -253,6 +253,7 @@
       this._configurePdfJs();
       if (this.pdfDoc) { try { await this.pdfDoc.destroy(); } catch (e) {} }
       if (this.darkDoc) { try { await this.darkDoc.destroy(); } catch (e) {} this.darkDoc = null; }
+      this._darkEverPainted = false;   // a fresh document starts with no dark frame to hold
 
       this.pdfDoc = await window.pdfjsLib.getDocument(this._docParams(pdfData)).promise;
       this.totalPages = this.pdfDoc.numPages;
@@ -368,17 +369,20 @@
       // A preview darkDoc is a 1-page mini-doc standing in for whichever page
       // it was built for — only usable while that's still the current page.
       // Using it for any OTHER page (a stale preview mid-navigation) would
-      // silently show the wrong page's content on the dark side, so treat it
-      // as "not ready" instead — the neutral placeholder below is honest,
-      // and the next preview or full pass corrects it as soon as it lands.
+      // silently show the wrong page's content on the dark side.
       const darkUsable = this.darkDoc && (!this.darkIsPreview || this.darkPreviewForPage === this.currentPage);
       if (darkUsable) {
         const dpage = await this.darkDoc.getPage(this.darkIsPreview ? 1 : Math.min(this.currentPage, this.darkDoc.numPages));
         if (token !== this._renderToken) return;
         await this._paint('_darkTask', this.canvasDark, dpage, tf, token);
         if (token !== this._renderToken) return;
-      } else {
-        // no MATCHING converted doc yet — neutral dark placeholder so the split isn't blank or wrong
+        this._darkEverPainted = true;
+      } else if (!this._darkEverPainted) {
+        // Very first page, before the first preview has landed: a neutral fill
+        // so the dark half isn't a white flash. Once a real dark frame has been
+        // painted we never blank it again — the previous page's dark render
+        // stays visible for the ~tens of ms until this page's does, which reads
+        // as a normal page turn rather than a black gap.
         this.canvasDark.width = Math.floor(w * ratio);
         this.canvasDark.height = Math.floor(h * ratio);
         const c = this.canvasDark.getContext('2d');

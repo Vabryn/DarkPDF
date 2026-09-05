@@ -290,6 +290,64 @@
     fullTimer = setTimeout(runFull, 850);
   }
 
+  // copyPages() drags in everything transitively reachable from the page:
+  // on a tagged book that means the struct-tree subtree -- thousands of
+  // /StructElem objects and megabytes of sibling streams the page never
+  // paints. On this book's contents pages that made a 13 MB one-page
+  // mini-doc whose save()+convert() took ~4.5s on the main thread, so the
+  // live preview sat blank while the user paged. Physically drop the
+  // catalog/page keys that anchor that non-visual baggage, then delete
+  // every indirect object no longer reachable from the render graph
+  // (Contents, Resources, and whatever those point at). Rendering is
+  // unchanged -- verified byte-for-byte on the bloated pages -- and the
+  // lossless full-document pass runs separately on the untouched original.
+  const PREVIEW_DROP_CATALOG_KEYS = ['StructTreeRoot', 'Outlines', 'Names', 'AcroForm',
+    'PageLabels', 'MarkInfo', 'OpenAction', 'ViewerPreferences', 'Threads', 'Metadata', 'PieceInfo'];
+  const PREVIEW_DROP_PAGE_KEYS = ['Annots', 'StructParents', 'Metadata', 'PieceInfo', 'AA', 'B', 'Tabs'];
+  // up-tree / sibling pointers: following them would re-reach the whole doc
+  const PREVIEW_WALK_SKIP_KEYS = new Set(['/Parent', '/P', '/Prev', '/Next', '/First', '/Last']);
+
+  function pruneMiniToRenderGraph(mini) {
+    const PL = window.PDFLib;
+    const ctx = mini.context;
+    const rootRef = ctx.trailerInfo.Root;
+    if (!rootRef) return;
+    const nm = (n) => PL.PDFName.of(n);
+
+    const catalog = ctx.lookup(rootRef);
+    if (catalog && catalog.delete) PREVIEW_DROP_CATALOG_KEYS.forEach((k) => catalog.delete(nm(k)));
+    const pageLeaf = mini.getPage(0).node;
+    PREVIEW_DROP_PAGE_KEYS.forEach((k) => pageLeaf.delete(nm(k)));
+
+    const keep = new Set([rootRef.toString(), mini.getPage(0).ref.toString()]);
+    const walk = (obj, depth) => {
+      if (obj == null || depth > 60) return;
+      if (obj instanceof PL.PDFRef) {
+        const s = obj.toString();
+        if (keep.has(s)) return;
+        keep.add(s);
+        walk(ctx.lookup(obj), depth + 1);
+        return;
+      }
+      if (obj instanceof PL.PDFArray) {
+        const a = obj.asArray();
+        for (let i = 0; i < a.length; i++) walk(a[i], depth + 1);
+        return;
+      }
+      const dict = obj instanceof PL.PDFDict ? obj : (obj && obj.dict instanceof PL.PDFDict ? obj.dict : null);
+      if (dict) {
+        for (const [k, v] of dict.entries()) {
+          if (!PREVIEW_WALK_SKIP_KEYS.has(k.toString())) walk(v, depth + 1);
+        }
+      }
+    };
+    walk(catalog, 0);
+    walk(pageLeaf, 0);
+    for (const [ref] of ctx.enumerateIndirectObjects()) {
+      if (!keep.has(ref.toString())) ctx.delete(ref);
+    }
+  }
+
   async function runPreview() {
     if (!state.srcDoc || !state.originalBytes) return;
     const token = ++previewToken;
@@ -298,8 +356,12 @@
       const mini = await window.PDFLib.PDFDocument.create();
       const [pg] = await mini.copyPages(state.srcDoc, [Math.max(0, targetPage - 1)]);
       mini.addPage(pg);
+      try { pruneMiniToRenderGraph(mini); } catch (e) { /* prune is best-effort; a full mini still converts, just slower */ }
       const res = await converter.convert(await mini.save(), { engine: state.activeEngine, pageRange: 'All' });
-      if (token !== previewToken) return;
+      // Drop the result if a newer preview superseded it, or if the full
+      // lossless pass has already finished — a late preview landing after
+      // runFull() would flip the dark side back to a 1-page stand-in.
+      if (token !== previewToken || state.conversionFresh) return;
       await viewer.setDarkDocument(res.pdfBytes, true, targetPage);
     } catch (e) {
       console.warn('preview conversion failed', e);
@@ -338,6 +400,7 @@
       state.convertedBytes = res.pdfBytes;
       state.conversionFresh = true;
       state.conversionRange = range;
+      previewToken++;   // invalidate any preview still in flight so it can't overwrite the lossless doc
 
       try { await viewer.setDarkDocument(res.pdfBytes, false); } catch (e) { console.warn('dark render', e); }
       if (token !== fullToken) return;
