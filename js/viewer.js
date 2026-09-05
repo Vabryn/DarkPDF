@@ -120,6 +120,16 @@
       };
       window.addEventListener('resize', onResize);
       window.addEventListener('orientationchange', onResize);
+
+      // The reading pane also changes width without a window resize — e.g. the
+      // Customize drawer pushing the layout in. Watch the pane itself so the
+      // page re-fits to it, tracking the drawer's slide frame by frame via the
+      // same cheap CSS-scale preview.
+      const pane = this.container.closest('.stage-viewport');
+      if (pane && typeof ResizeObserver !== 'undefined') {
+        this._paneObserver = new ResizeObserver(onResize);
+        this._paneObserver.observe(pane);
+      }
     }
 
     /** Inner size of the scroll container available for a page (minus padding). */

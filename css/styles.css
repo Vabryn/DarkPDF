@@ -649,6 +649,36 @@ kbd {
   right: 0;
 }
 
+/* When the drawer opens on a wide window, push the toolbars and reading pane
+   in by its width instead of covering them. The pane transition matches the
+   drawer's, and the viewer re-fits the page to the narrower pane as it slides
+   (ResizeObserver in viewer.js), so the whole thing moves as one piece.
+   Below 769px the drawer is full-width and stays an overlay. */
+.workspace-nav,
+.workspace-subnav,
+.zoom-bar,
+.stage-viewport {
+  transition: margin-right 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.page-pill {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (min-width: 769px) {
+  .workspace:has(.studio-drawer.open) .workspace-nav,
+  .workspace:has(.studio-drawer.open) .workspace-subnav,
+  .workspace:has(.studio-drawer.open) .zoom-bar,
+  .workspace:has(.studio-drawer.open) .stage-viewport {
+    margin-right: 320px;
+  }
+  .workspace:has(.studio-drawer.open) .page-nav-next {
+    right: calc(20px + 320px);
+  }
+  .workspace:has(.studio-drawer.open) .page-pill {
+    transform: translateX(calc(-50% - 160px));
+  }
+}
+
 .drawer-header {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border-hairline);
@@ -826,7 +856,8 @@ kbd {
   color: var(--text-pure);
   cursor: pointer;
   z-index: 60;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease,
+    right 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .page-nav-arrow:hover:not(:disabled) {
   background: rgba(32, 32, 38, 0.85);
