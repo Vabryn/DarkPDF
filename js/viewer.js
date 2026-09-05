@@ -234,10 +234,22 @@
       }
     }
 
+    /** Real-time CSS scale preview while dragging the zoom slider (zero canvas allocations). */
+    previewZoom(scale) {
+      this.fitMode = false;
+      this.zoomScale = Math.max(0.25, Math.min(4, scale));
+      if (!this._renderedScale || !this._baseW) return;
+      const css = this.zoomScale / this._renderedScale;
+      this.stage.style.transformOrigin = 'top left';
+      this.stage.style.transform = `scale(${css})`;
+      this.wrapper.style.width = `${Math.round(this.zoomScale * this._baseW)}px`;
+      this.wrapper.style.height = `${Math.round(this.zoomScale * this._baseH)}px`;
+    }
+
     /** Manual zoom from the slider — leaves fit-mode. */
     setZoom(scale) {
       this.fitMode = false;
-      this.zoomScale = Math.max(0.4, Math.min(4, scale));
+      this.zoomScale = Math.max(0.25, Math.min(4, scale));
       if (this.pdfDoc) this.renderCurrentPage();
     }
 
@@ -263,30 +275,18 @@
       this._configurePdfJs();
       if (this.pdfDoc) { try { await this.pdfDoc.destroy(); } catch (e) {} }
       if (this.darkDoc) { try { await this.darkDoc.destroy(); } catch (e) {} this.darkDoc = null; }
-      this._darkEverPainted = false;   // a fresh document starts with no dark frame to hold
-
       this.pdfDoc = await window.pdfjsLib.getDocument(this._docParams(pdfData)).promise;
       this.totalPages = this.pdfDoc.numPages;
       this.currentPage = 1;
-      this.fitToView();                      // fire-and-forget: workspace must not block on painting
-      return { numPages: this.totalPages };
+      this._darkEverPainted = false;
+      this._renderedScale = 0;
+      await this._fit(this.fitStrategy);
     }
 
-    // `forPage` is the real page number a PREVIEW document represents (it's
-    // always a 1-page mini-doc, page 1 of it standing in for that one real
-    // page). Without tracking that, _doRender's `min(currentPage, numPages)`
-    // silently clamped to page 1 for ANY current page once the user had
-    // navigated past the page the preview was built for -- showing light and
-    // dark sides for two different pages until the next preview caught up.
-    async setDarkDocument(bytes, isPreview, forPage) {
+    async setDarkDocument(pdfData, isPreview = false, forPage = null) {
       this._configurePdfJs();
-      const token = ++this._renderToken;
-      let doc;
-      try { doc = await window.pdfjsLib.getDocument(this._docParams(bytes)).promise; }
-      catch (e) { console.warn('dark document load failed', e); return; }
-      if (token !== this._renderToken) { try { await doc.destroy(); } catch (e) {} return; }
       if (this.darkDoc) { try { await this.darkDoc.destroy(); } catch (e) {} }
-      this.darkDoc = doc;
+      this.darkDoc = await window.pdfjsLib.getDocument(this._docParams(pdfData)).promise;
       this.darkIsPreview = !!isPreview;
       this.darkPreviewForPage = isPreview ? (forPage || this.currentPage) : null;
       this.renderCurrentPage();
@@ -339,11 +339,17 @@
       try {
         await task.promise;
       } catch (e) {
+        off.width = 0;
+        off.height = 0;
         if (this[slot] === task) this[slot] = null;
         return null;                              // cancelled / superseded — keep the current frame
       }
       if (this[slot] === task) this[slot] = null;
-      if (token !== this._renderToken) return null;
+      if (token !== this._renderToken) {
+        off.width = 0;
+        off.height = 0;
+        return null;
+      }
       return { off, dw, dh };
     }
 
@@ -355,6 +361,9 @@
       canvas.width = frame.dw;
       canvas.height = frame.dh;
       canvas.getContext('2d').drawImage(frame.off, 0, 0);
+      // Immediately free offscreen backing store to prevent memory buildup on iOS Safari
+      frame.off.width = 0;
+      frame.off.height = 0;
     }
 
     async _doRender(token) {
@@ -362,10 +371,8 @@
       const page = await this.pdfDoc.getPage(this.currentPage);
       if (token !== this._renderToken) return;
 
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
       const vp = page.getViewport({ scale: this.zoomScale });
       const w = Math.floor(vp.width), h = Math.floor(vp.height);
-      const tf = [ratio, 0, 0, ratio, 0, 0];
       this._baseW = vp.width / this.zoomScale;
       this._baseH = vp.height / this.zoomScale;
       this._renderedScale = this.zoomScale;
@@ -373,6 +380,30 @@
       this._clearPreview();                        // this frame is painted at the real scale
       this.stage.style.width = `${w}px`;
       this.stage.style.height = `${h}px`;
+
+      // Safe DPR & canvas limits to prevent iOS Safari Jetsam OOM crashes
+      const dpr = window.devicePixelRatio || 1;
+      let ratio = Math.min(dpr, 2);
+      // At higher zoom scales, reduce DPR ratio so total physical density doesn't exceed 2.5x
+      if (this.zoomScale * ratio > 2.5) {
+        ratio = Math.max(1, 2.5 / this.zoomScale);
+      }
+
+      // Hard caps for mobile WebKit (max 3072px dimension, max 9 Megapixels)
+      const MAX_CANVAS_DIM = 3072;
+      const MAX_CANVAS_PIXELS = 9 * 1024 * 1024;
+      let renderW = Math.max(1, Math.floor(vp.width * ratio));
+      let renderH = Math.max(1, Math.floor(vp.height * ratio));
+
+      let scaleDown = 1;
+      if (renderW > MAX_CANVAS_DIM) scaleDown = Math.min(scaleDown, MAX_CANVAS_DIM / renderW);
+      if (renderH > MAX_CANVAS_DIM) scaleDown = Math.min(scaleDown, MAX_CANVAS_DIM / renderH);
+      if (renderW * renderH * scaleDown * scaleDown > MAX_CANVAS_PIXELS) {
+        scaleDown = Math.min(scaleDown, Math.sqrt(MAX_CANVAS_PIXELS / (renderW * renderH)));
+      }
+
+      const effectiveRatio = ratio * scaleDown;
+      const tf = [effectiveRatio, 0, 0, effectiveRatio, 0, 0];
 
       // A preview darkDoc is a 1-page mini-doc standing in for whichever page
       // it was built for — only usable while that's still the current page.
@@ -404,10 +435,10 @@
         // painted we never blank it again — the previous page's dark render
         // stays visible until this page's does, which reads as a normal page
         // turn rather than a black gap.
-        this.canvasDark.width = Math.floor(w * ratio);
-        this.canvasDark.height = Math.floor(h * ratio);
+        this.canvasDark.width = Math.floor(w * effectiveRatio);
+        this.canvasDark.height = Math.floor(h * effectiveRatio);
         const c = this.canvasDark.getContext('2d');
-        c.setTransform(ratio, 0, 0, ratio, 0, 0);
+        c.setTransform(effectiveRatio, 0, 0, effectiveRatio, 0, 0);
         c.fillStyle = '#1b1b1b';
         c.fillRect(0, 0, w, h);
       }

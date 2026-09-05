@@ -1,0 +1,9 @@
+{
+  // Static deploy of DarkPDF. No Worker script — just assets.
+  // https://developers.cloudflare.com/workers/static-assets/
+  "name": "darkpdf",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "."
+  }
+}

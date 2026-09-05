@@ -184,7 +184,8 @@
       viewer.setViewMode(btn.dataset.mode);
     }));
 
-    els.zoomSlider.addEventListener('input', () => setZoom(+els.zoomSlider.value));
+    els.zoomSlider.addEventListener('input', () => setZoom(+els.zoomSlider.value, false));
+    els.zoomSlider.addEventListener('change', () => setZoom(+els.zoomSlider.value, true));
     els.btnZoomReset.addEventListener('click', () => viewer.fitToView());
     els.btnZoomFill.addEventListener('click', () => viewer.fitToWidth());
 
@@ -215,8 +216,8 @@
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
       if (e.key === 'ArrowLeft') els.btnPrevPage.click();
       else if (e.key === 'ArrowRight') els.btnNextPage.click();
-      else if (e.key === '=' || e.key === '+') setZoom(state.zoomPct + 15);
-      else if (e.key === '-') setZoom(state.zoomPct - 15);
+      else if (e.key === '=' || e.key === '+') setZoom(state.zoomPct + 15, true);
+      else if (e.key === '-') setZoom(state.zoomPct - 15, true);
     });
   }
 
@@ -254,11 +255,22 @@
 
   const invalidateConversion = () => { state.conversionFresh = false; };
 
-  function setZoom(pct) {
+  let zoomDebounceTimer = null;
+  function setZoom(pct, immediate = false) {
     state.zoomPct = Math.max(25, Math.min(400, Math.round(pct)));
     els.zoomSlider.value = state.zoomPct;
     els.zoomVal.textContent = `${state.zoomPct}%`;
-    viewer.setZoom(state.zoomPct / 100);     // leaves fit-mode
+    const targetScale = state.zoomPct / 100;
+    if (immediate) {
+      clearTimeout(zoomDebounceTimer);
+      viewer.setZoom(targetScale);
+    } else {
+      viewer.previewZoom(targetScale);
+      clearTimeout(zoomDebounceTimer);
+      zoomDebounceTimer = setTimeout(() => {
+        viewer.setZoom(targetScale);
+      }, 150);
+    }
   }
 
   function gotoPage(page) {
