@@ -371,7 +371,10 @@
             settle(reject, new Error(msg.message));
           }
         };
-        worker.onerror = (err) => settle(reject, new Error(err.message || 'Conversion worker failed.'));
+        worker.onerror = (err) => {
+          err.preventDefault();   // we're handling it via reject() below -- don't also report it as uncaught
+          settle(reject, new Error(err.message || 'Conversion worker failed.'));
+        };
         worker.postMessage(
           { pdfBytes: bytes, engine, pageRange: options.pageRange, customConfig: this.customConfig },
           [bytes.buffer]
