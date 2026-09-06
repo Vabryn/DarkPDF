@@ -649,6 +649,48 @@
         P.drawText(t, { x: px + i * 66 + 12, y: py - 20, size: 7.5, font: F, color: muted });
       });
 
+      // ---- extra pages: give the preview a real 10-page document to page through
+      const TOTAL = 10;
+      const footer = (page, n) => {
+        page.drawLine({ start: { x: 48, y: 56 }, end: { x: W - 48, y: 56 }, thickness: 0.75, color: rule });
+        page.drawText('DarkPDF sample', { x: 48, y: 42, size: 8, font: F, color: muted });
+        page.drawText(`Page ${n} / ${TOTAL}`, { x: W - 48 - 60, y: 42, size: 8, font: F, color: muted });
+      };
+      footer(P, 1);
+
+      const bodyLines = [
+        'Each page here is plain text plus vector geometry so the dark',
+        'conversion has something real to chew on: selectable paragraphs,',
+        'ruled lines, and a chart drawn from primitives rather than a raster.',
+        'Use the page controls to step through all ten pages and confirm the',
+        'preview, the page counter, and the dark render all stay in sync.',
+      ];
+
+      for (let n = 2; n <= TOTAL; n++) {
+        const pg = doc.addPage([595, 792]);
+        pg.drawText(`Section ${n - 1}`, { x: 48, y: 744, size: 20, font: B, color: rgb(0.10, 0.22, 0.55) });
+        pg.drawText(`Page ${n} of ${TOTAL} — vector + text furniture`, { x: 48, y: 726, size: 10, font: F, color: muted });
+        pg.drawLine({ start: { x: 48, y: 716 }, end: { x: W - 48, y: 716 }, thickness: 1, color: rule });
+
+        bodyLines.forEach((ln, i) => {
+          pg.drawText(ln, { x: 48, y: 690 - i * 16, size: 11, font: F, color: ink });
+        });
+
+        // A small bar chart whose values shift page to page.
+        const gx = 48, gy = 360, gw = 300, gh = 180;
+        pg.drawText('Weekly throughput', { x: gx, y: gy + gh + 14, size: 11, font: B, color: ink });
+        pg.drawLine({ start: { x: gx, y: gy }, end: { x: gx + gw, y: gy }, thickness: 1, color: ink });
+        pg.drawLine({ start: { x: gx, y: gy }, end: { x: gx, y: gy + gh }, thickness: 1, color: ink });
+        const palette = [rgb(0.20, 0.55, 0.90), rgb(0.15, 0.70, 0.55), rgb(0.95, 0.65, 0.20), rgb(0.85, 0.30, 0.40), rgb(0.55, 0.45, 0.85), rgb(0.30, 0.60, 0.75)];
+        for (let i = 0; i < 6; i++) {
+          const h = 24 + ((n * 17 + i * 29) % 140);
+          pg.drawRectangle({ x: gx + 16 + i * 46, y: gy + 1, width: 30, height: h, color: palette[i] });
+          pg.drawText(`W${i + 1}`, { x: gx + 22 + i * 46, y: gy - 14, size: 9, font: F, color: muted });
+        }
+
+        footer(pg, n);
+      }
+
       const bytes = await doc.save();
       state.fileName = 'darkpdf-sample.pdf';
       state.fileSize = bytes.byteLength;
