@@ -362,15 +362,26 @@
   }
 
   async function runPreview() {
-    if (!state.srcDoc || !state.originalBytes) return;
+    if (!state.originalBytes) return;
     const token = ++previewToken;
     const targetPage = state.currentPage;   // tag the result with the page it's actually FOR, not whatever's current when it lands
     try {
-      const mini = await window.PDFLib.PDFDocument.create();
-      const [pg] = await mini.copyPages(state.srcDoc, [Math.max(0, targetPage - 1)]);
-      mini.addPage(pg);
-      try { pruneMiniToRenderGraph(mini); } catch (e) { /* prune is best-effort; a full mini still converts, just slower */ }
-      const res = await converter.convert(await mini.save(), { engine: state.activeEngine, pageRange: 'All' });
+      let previewBytes, previewRange;
+      if (state.srcDoc) {
+        const mini = await window.PDFLib.PDFDocument.create();
+        const [pg] = await mini.copyPages(state.srcDoc, [Math.max(0, targetPage - 1)]);
+        mini.addPage(pg);
+        try { pruneMiniToRenderGraph(mini); } catch (e) { /* prune is best-effort; a full mini still converts, just slower */ }
+        previewBytes = await mini.save();
+        previewRange = 'All';
+      } else {
+        // pdf-lib couldn't parse this file (stricter than pdf.js). Preview
+        // straight from the original bytes, limited to the page in view, so
+        // the dark side still shows something while runFull() catches up.
+        previewBytes = state.originalBytes;
+        previewRange = String(targetPage);
+      }
+      const res = await converter.convert(previewBytes, { engine: state.activeEngine, pageRange: previewRange });
       // Drop the result if a newer preview superseded it, or if the full
       // lossless pass has already finished — a late preview landing after
       // runFull() would flip the dark side back to a 1-page stand-in.
@@ -533,7 +544,11 @@
       state.srcDoc = null;
       throw err;
     }
-    state.pageCount = info.numPages;
+    // Read the page count defensively: whatever loadDocument returned, the
+    // viewer itself is the source of truth. A hiccup here must not abort the
+    // dark conversion below.
+    const pageCount = (info && info.numPages) || viewer.getPageCount() || 1;
+    state.pageCount = pageCount;
     state.currentPage = 1;
     els.pageTotalDisplay.textContent = `/ ${state.pageCount}`;
     els.pageInput.value = 1;

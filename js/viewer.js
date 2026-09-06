@@ -275,13 +275,20 @@
       this._configurePdfJs();
       if (this.pdfDoc) { try { await this.pdfDoc.destroy(); } catch (e) {} }
       if (this.darkDoc) { try { await this.darkDoc.destroy(); } catch (e) {} this.darkDoc = null; }
-      this.pdfDoc = await window.pdfjsLib.getDocument(this._docParams(pdfData)).promise;
-      this.totalPages = this.pdfDoc.numPages;
+      const doc = await window.pdfjsLib.getDocument(this._docParams(pdfData)).promise;
+      if (!doc || !doc.numPages) throw new Error('PDF has no readable pages.');
+      this.pdfDoc = doc;
+      this.totalPages = doc.numPages;
       this.currentPage = 1;
       this._darkEverPainted = false;
       this._renderedScale = 0;
-      await this._fit(this.fitStrategy);
+      // Layout fit is best-effort — a fussy first page must not fail the load.
+      try { await this._fit(this.fitStrategy); } catch (e) { /* rendered lazily on first paint */ }
       return { numPages: this.totalPages };
+    }
+
+    getPageCount() {
+      return this.totalPages || (this.pdfDoc && this.pdfDoc.numPages) || 0;
     }
 
     async setDarkDocument(pdfData, isPreview = false, forPage = null) {
