@@ -527,7 +527,13 @@
 
     try {
       state.srcDoc = await window.PDFLib.PDFDocument.load(state.originalBytes.slice(), { ignoreEncryption: true, updateMetadata: false });
-    } catch (e) { state.srcDoc = null; }
+    } catch (e) {
+      // pdf.js will still render this file; pdf-lib (used for the fast
+      // page-at-a-time preview) can't parse it, so the dark side comes from
+      // the slower whole-document pass. Tell the user why previews lag.
+      state.srcDoc = null;
+      toast('Unusual PDF structure — dark rendering may take a moment longer.', 'info');
+    }
 
     let info;
     try {
