@@ -281,6 +281,7 @@
       this._darkEverPainted = false;
       this._renderedScale = 0;
       await this._fit(this.fitStrategy);
+      return { numPages: this.totalPages };
     }
 
     async setDarkDocument(pdfData, isPreview = false, forPage = null) {
