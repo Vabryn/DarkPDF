@@ -135,27 +135,36 @@
 
       if (oc.mode === 'tint') return [oc.rgb.r, oc.rgb.g, oc.rgb.b];
 
-      // A pale coloured fill is almost always a decorative page/section wash —
-      // Pearson-style banner bands, tinted callout boxes, cover panels.
-      // Inverting its lightness while keeping the full hue and saturation turns
-      // it into a glaring mid-tone (a faded olive becomes electric lime), so
-      // the paler the original, the more it collapses toward the dark ground
-      // with just a hint of its hue left. Deep, saturated fills — chart bars,
-      // badges, filled icons — sit at low/mid lightness and pass through
-      // essentially unchanged.
-      if (!isStroke && l > 0.45) {
-        const wash = clamp((l - 0.45) / 0.4, 0, 1);          // 0 by l=0.45, 1 by l>=0.85
-        const tint = this.hslToRgb(
-          h,
-          clamp(s * oc.saturation * (1 - 0.75 * wash), 0, 0.6),
-          clamp(1 - l, 0.28, 0.7)
-        );
-        const k = wash * 0.85;                               // blend toward the ground
-        return [
-          clamp(tint[0] * (1 - k) + bg.r * k + 0.02, 0, 1),
-          clamp(tint[1] * (1 - k) + bg.g * k + 0.02, 0, 1),
-          clamp(tint[2] * (1 - k) + bg.b * k + 0.025, 0, 1)
-        ];
+      // A bright coloured fill is almost always decorative chrome — Pearson-style
+      // banner bands, tinted callout boxes, cover panels. Inverting its lightness
+      // while keeping the full hue and saturation turns it into a glaring
+      // mid-tone (a faded olive becomes electric lime), so the brighter it is
+      // the harder it collapses toward the dark ground, keeping just a hint of
+      // its hue. Two refinements over plain HSL lightness:
+      //   - use perceptual luminance: a saturated lime reads far brighter than
+      //     a saturated red at the same HSL "L", and it's the lime that grates;
+      //   - weight by hue: yellow-through-green (~40-170 deg) is the harsh
+      //     "neon" band on a dark ground, so it gets the full treatment while
+      //     warm and blue/cyan fills are left nearly alone.
+      // Deep fills (low luminance — chart bars, badges) are untouched.
+      if (!isStroke) {
+        const lumo = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        const hd = h * 360;
+        const harsh = (hd >= 40 && hd <= 170) ? 1 : 0.18;
+        const wash = clamp((lumo - 0.34) / 0.42, 0, 1) * harsh;
+        if (wash > 0.03) {
+          const tint = this.hslToRgb(
+            h,
+            clamp(s * oc.saturation * (1 - 0.82 * wash), 0, 0.55),
+            clamp(1 - l, 0.26, 0.64)
+          );
+          const k = wash * 0.9;                              // blend toward the ground
+          return [
+            clamp(tint[0] * (1 - k) + bg.r * k + 0.02, 0, 1),
+            clamp(tint[1] * (1 - k) + bg.g * k + 0.02, 0, 1),
+            clamp(tint[2] * (1 - k) + bg.b * k + 0.025, 0, 1)
+          ];
+        }
       }
 
       return this.hslToRgb(h, clamp(s * oc.saturation, 0, 1), clamp(1 - l, 0.32, 0.86));

@@ -31,6 +31,16 @@ const { StreamParser } = require('./_boot.js');
   c = rgbOf(run('0.93 0.97 0.85 rg 0 0 10 10 re f'));
   ok(lum(c) < 0.2 && chroma(c) < 0.06, `very pale green wash reads as background (lum ${lum(c).toFixed(3)}, chroma ${chroma(c).toFixed(3)})`);
 
+  // a genuinely SATURATED bright lime banner (not pale) must still calm down —
+  // it's the harshest thing on a dark ground.
+  c = rgbOf(run('0.6 0.8 0.25 rg 0 0 10 10 re f'));
+  ok(lum(c) < 0.3, `bright lime banner -> dark, not neon (lum ${lum(c).toFixed(3)})`);
+  ok(chroma(c) < 0.16, `bright lime banner desaturated (chroma ${chroma(c).toFixed(3)})`);
+
+  // a bright cyan bar keeps its colour (user: "the cyan is fine")
+  c = rgbOf(run('0.1 0.75 0.85 rg 0 0 10 10 re f'));
+  ok(chroma(c) > 0.2, `bright cyan bar keeps its colour (chroma ${chroma(c).toFixed(3)})`);
+
   // genuinely saturated colours must STILL be treated as chromatic
   c = rgbOf(run('0.85 0.2 0.2 rg 0 0 10 10 re f'));
   ok(chroma(c) > 0.2, `saturated red object keeps chroma (${chroma(c).toFixed(3)})`);
