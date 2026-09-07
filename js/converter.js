@@ -471,10 +471,83 @@
         return undefined;
       };
 
+      // A page that is essentially one wall-to-wall raster image — a cover, a
+      // full-bleed figure, a scanned page — is left exactly as the publisher
+      // made it: no colour remap, no dark ground. Detect it by walking the
+      // graphics state (q / Q / cm) and checking whether an Image XObject is
+      // scaled to cover ~the whole page.
+      const isCoverPage = (node, pageRes) => {
+        try {
+          const b = resolve(node.get(PDFName.of('CropBox')) || node.get(PDFName.of('MediaBox')));
+          if (!(b instanceof PDFArray) || b.size() < 4) return false;
+          const pageArea = Math.abs(
+            (Number(b.get(2).toString()) - Number(b.get(0).toString())) *
+            (Number(b.get(3).toString()) - Number(b.get(1).toString()))
+          );
+          if (!(pageArea > 0)) return false;
+
+          const xo = resolve(pageRes && pageRes.get && pageRes.get(PDFName.of('XObject')));
+          if (!(xo instanceof PDFDict)) return false;
+          const imgNames = new Set();
+          for (const k of xo.keys()) {
+            const o = resolve(xo.get(k));
+            if (o instanceof PDFRawStream &&
+                (o.dict.get(PDFName.of('Subtype')) || {}).toString?.() === '/Image') {
+              imgNames.add(k.toString().replace(/^\//, ''));
+            }
+          }
+          if (!imgNames.size) return false;
+
+          const cs = resolve(node.get(PDFName.of('Contents')));
+          const parts = cs instanceof PDFArray
+            ? Array.from({ length: cs.size() }, (_, i) => resolve(cs.get(i)))
+            : [cs];
+          let text = '';
+          for (const s of parts) {
+            if (!(s instanceof PDFRawStream)) continue;
+            text += new TextDecoder('latin1').decode(decodePDFRawStream(s).decode()) + '\n';
+          }
+          if (!text) return false;
+
+          const toks = text.match(/\/[^\s<>\[\]\/(){}%]+|-?\d*\.?\d+|[A-Za-z*'"]+/g) || [];
+          let ctm = [1, 0, 0, 1, 0, 0];
+          const stack = [];
+          let nums = [];
+          let lastName = null;
+          let inText = 0;
+          for (const t of toks) {
+            if (t === 'BT') { inText++; nums = []; continue; }
+            if (t === 'ET') { inText = Math.max(0, inText - 1); nums = []; continue; }
+            if (inText) { nums = []; continue; }
+            if (t[0] === '/') { lastName = t.slice(1); nums = []; continue; }
+            if (/^-?\d*\.?\d+$/.test(t)) { nums.push(parseFloat(t)); continue; }
+            if (t === 'q') { stack.push(ctm.slice()); nums = []; continue; }
+            if (t === 'Q') { if (stack.length) ctm = stack.pop(); nums = []; continue; }
+            if (t === 'cm' && nums.length >= 6) {
+              const [a, b2, c, d, e, f] = nums.slice(-6);
+              const [A, B, C, D, E, F] = ctm;
+              ctm = [a * A + b2 * C, a * B + b2 * D, c * A + d * C, c * B + d * D, e * A + f * C + E, e * B + f * D + F];
+              nums = [];
+              continue;
+            }
+            if (t === 'Do' && lastName && imgNames.has(lastName)) {
+              const imgArea = Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]);   // unit square -> device
+              if (imgArea >= 0.85 * pageArea) return true;
+            }
+            nums = [];
+          }
+          return false;
+        } catch (e) { return false; }
+      };
+
+      const coverPages = new Set();
+
       for (let i = 0; i < pages.length; i++) {
         if (!inRange.has(i + 1)) continue;
         const node = pages[i].node;
         const pageRes = node.Resources() || inheritedResources(node);
+
+        if (isCoverPage(node, pageRes)) { coverPages.add(i); continue; }
 
         const contents = node.get(PDFName.of('Contents'));
         if (contents instanceof PDFRef) addRef(contents, pageRes);
@@ -619,9 +692,10 @@
         }
       }
 
-      // ---- 3. lay a dark ground behind every in-range page
+      // ---- 3. lay a dark ground behind every in-range page (except full-page
+      //         image pages, which are left as the publisher made them)
       for (let i = 0; i < pages.length; i++) {
-        if (!inRange.has(i + 1)) continue;
+        if (!inRange.has(i + 1) || coverPages.has(i)) continue;
         const page = pages[i];
         const { x, y, width, height } = page.getCropBox();
         const bgRef = ctx.register(ctx.flateStream(
@@ -629,6 +703,8 @@
         ));
         this._prependContent(ctx, page, bgRef, PDFName, PDFRef, PDFArray);
       }
+
+      stat.pagesLeftAsImage = coverPages.size;
 
       onProgress({ stage: 'saving', percent: 95, message: 'Encoding output PDF...' });
       await this._yield();
