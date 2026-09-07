@@ -1,4 +1,4 @@
-const { PDFLib, pako } = require('./_boot.js');
+const { PDFLib } = require('./_boot.js');
 const { PDFName, PDFRef, PDFArray, PDFDict, PDFRawStream, decodePDFRawStream } = PDFLib;
 
 // Decode every page content stream of a doc into one latin1 string per page.

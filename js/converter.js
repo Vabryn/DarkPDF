@@ -28,6 +28,18 @@
   const SKIP_STREAM_KEYS = new Set(['Filter', 'DecodeParms', 'DP', 'Length', 'F', 'FFilter', 'FDecodeParms']);
 
   /**
+   * zlib-format DEFLATE (RFC 1950) — the exact container PDF's /FlateDecode
+   * expects. Uses the platform CompressionStream (every current browser, Web
+   * Workers, and Node 18+ where the test suite runs) instead of a vendored
+   * copy of pako, which was in the bundle for this one call.
+   */
+  async function deflateZlib(bytes) {
+    if (!bytes || !bytes.length) return bytes;
+    const stream = new Response(bytes).body.pipeThrough(new CompressionStream('deflate'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  /**
    * Compile a PDF tint-transform function (Types 0, 2, 3, 4) into a cheap
    * `(t) => number[]` closure. Used ONLY to resolve Separation / single-
    * colorant DeviceN colourspaces into a real RGB-producing function — every
@@ -404,7 +416,6 @@
     /* ============ STANDARD — content-stream colour remap (lossless) ======== */
     async _convertStreamRemap(pdfBytes, onProgress, options) {
       const { PDFDocument, PDFName, PDFRef, PDFArray, PDFDict, PDFRawStream, PDFNumber, decodePDFRawStream } = this._getPDFLib();
-      const pako = window.pako;
 
       const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true, updateMetadata: false });
       const ctx = pdfDoc.context;
@@ -593,10 +604,10 @@
           if (!SKIP_STREAM_KEYS.has(k.toString().slice(1))) newDict.set(k, v);
         }
         let payload = result.bytes;
-        if (pako) {
-          try { payload = pako.deflate(result.bytes); newDict.set(PDFName.of('Filter'), PDFName.of('FlateDecode')); }
-          catch (e) { payload = result.bytes; }
-        }
+        try {
+          payload = await deflateZlib(result.bytes);
+          newDict.set(PDFName.of('Filter'), PDFName.of('FlateDecode'));
+        } catch (e) { payload = result.bytes; }
         newDict.set(PDFName.of('Length'), PDFNumber.of(payload.length));
         ctx.assign(ref, PDFRawStream.of(newDict, payload));
         stat.streamsChanged++;

@@ -16,7 +16,7 @@
  * Scanned mode is NOT run here -- it needs canvas + pdf.js page rendering,
  * which stays on the main thread.
  */
-importScripts('vendor/pdf-lib.min.js', 'vendor/pako.min.js', 'stream-parser.js', 'converter.js');
+importScripts('vendor/pdf-lib.min.js', 'stream-parser.js', 'converter.js');
 
 self.onmessage = async (e) => {
   const { pdfBytes, engine, pageRange, customConfig } = e.data;

@@ -4,11 +4,9 @@ const vm = require('vm');
 const fs = require('fs');
 
 const PDFLib = require('../js/vendor/pdf-lib.min.js');
-const pako = require('../js/vendor/pako.min.js');
 
 global.window = global;
 global.window.PDFLib = PDFLib;
-global.window.pako = pako;
 
 // load stream-parser.js (browser IIFE that assigns window.StreamParser)
 const sp = fs.readFileSync(path.join(__dirname, '../js/stream-parser.js'), 'utf8');
@@ -16,7 +14,7 @@ vm.runInThisContext(sp, { filename: 'stream-parser.js' });
 const cv = fs.readFileSync(path.join(__dirname, '../js/converter.js'), 'utf8');
 vm.runInThisContext(cv, { filename: 'converter.js' });
 
-module.exports = { PDFLib, pako, StreamParser: global.window.StreamParser, PDFConverter: global.window.PDFConverter };
+module.exports = { PDFLib, StreamParser: global.window.StreamParser, PDFConverter: global.window.PDFConverter };
 
 // ---- tiny assert helpers
 let PASS = 0, FAIL = 0;

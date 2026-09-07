@@ -4,8 +4,9 @@ Convert a light PDF to dark **entirely in the browser** — no upload, no server
 no build step. Nothing is rasterised: the PDF's own structure is edited in
 place, so text stays selectable text and vectors stay vectors.
 
-pdf-lib, pdf.js and pako are bundled in `js/vendor/` — the app makes **zero
-network requests** at runtime and runs fully offline. A strict
+pdf-lib and pdf.js are bundled in `js/vendor/` — the app makes **zero
+network requests** at runtime and runs fully offline. Stream re-compression
+uses the platform `CompressionStream`, so nothing else is vendored. A strict
 `Content-Security-Policy` is set in `index.html`.
 
 ## What is preserved
