@@ -1298,3 +1298,24 @@ kbd {
 /* header: nudge the wordmark onto the icon's optical baseline */
 .brand { align-items: center; }
 .brand-name { line-height: 1; }
+
+/* iOS Safari zooms the whole page when a focused control computes under 16px.
+   The toolbar selects and the hex / page-number inputs render at 11-12px, so
+   tapping one on an iPhone yanked the viewport. Bump just those to 16px on
+   touch devices; pointer/hover devices (every desktop) are untouched, and the
+   controls have box-sizing:border-box with generous min-heights so the larger
+   text still fits their rows. */
+@media (pointer: coarse) {
+  .clean-select,
+  .param-hex,
+  .pager-input,
+  input[type="text"],
+  input[type="number"],
+  select {
+    font-size: 16px;
+  }
+  /* 3 digits of page number at 16px need a touch more room than the 40/46px
+     desktop width. */
+  .pager-input { width: 3.25em; }
+  .page-pill .pager-input { width: 3.5em; }
+}
