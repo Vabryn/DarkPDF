@@ -135,6 +135,9 @@
     };
     bindEvents();
     refreshSliderLabels();
+    // Bring back the document from the last session (a refresh shouldn't dump
+    // you on the upload screen). No-ops silently if there's nothing stored.
+    restoreSession();
   }
 
   function bindEvents() {
@@ -158,6 +161,8 @@
       els.workspace.style.display = 'none';
       els.uploadSection.style.display = 'flex';
       els.fileInput.value = '';
+      state.originalBytes = null;
+      clearSession();
     });
     // open a different PDF without leaving the workspace
     els.btnOpenDoc.addEventListener('click', () => { els.fileInput.value = ''; els.fileInput.click(); });
@@ -253,7 +258,102 @@
     scheduleRefresh();
   }
 
-  const invalidateConversion = () => { state.conversionFresh = false; };
+  /* ---- session persistence -------------------------------------------------
+     A refresh (accidental or not) should drop you back on the same document,
+     not the upload screen. The original PDF bytes live in IndexedDB (too big
+     for localStorage); the light settings live alongside. The converted output
+     is never stored — it's regenerated from the original + settings on
+     restore. Everything stays on this device; "Open a different PDF" /
+     leaving the workspace clears it. */
+  const SESSION = (() => {
+    const DB = 'darkpdf-session', STORE = 'kv';
+    let dbp = null;
+    const open = () => {
+      if (dbp) return dbp;
+      dbp = new Promise((res, rej) => {
+        let r;
+        try { r = indexedDB.open(DB, 1); } catch (e) { rej(e); return; }
+        r.onupgradeneeded = () => r.result.createObjectStore(STORE);
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+      return dbp;
+    };
+    const run = async (mode, op) => {
+      const db = await open();
+      return new Promise((res, rej) => {
+        const t = db.transaction(STORE, mode);
+        const rq = op(t.objectStore(STORE));
+        t.oncomplete = () => res(rq ? rq.result : undefined);
+        t.onerror = t.onabort = () => rej(t.error);
+      });
+    };
+    return {
+      get: (k) => run('readonly', (s) => s.get(k)).catch(() => undefined),
+      put: (k, v) => run('readwrite', (s) => s.put(v, k)).catch(() => {}),
+      del: (k) => run('readwrite', (s) => s.delete(k)).catch(() => {})
+    };
+  })();
+
+  function collectSessionMeta() {
+    return {
+      name: state.fileName, size: state.fileSize,
+      engine: state.activeEngine,
+      themeId: els.themeSelect.value,
+      colors: { ...converter.customConfig },
+      page: state.currentPage, zoom: state.zoomPct,
+      savedAt: Date.now()
+    };
+  }
+  let metaSaveTimer = null;
+  function schedulePersistMeta() {
+    if (!state.originalBytes) return;
+    clearTimeout(metaSaveTimer);
+    metaSaveTimer = setTimeout(() => { SESSION.put('meta', collectSessionMeta()); }, 500);
+  }
+  let restoringSession = false;
+  async function persistDocument() {
+    if (!state.originalBytes || restoringSession) return;   // no re-write of what we just restored
+    try {
+      await SESSION.put('bytes', state.originalBytes.slice().buffer);
+      await SESSION.put('meta', collectSessionMeta());
+    } catch (e) { /* private mode / quota — just skip persistence */ }
+  }
+  async function clearSession() {
+    clearTimeout(metaSaveTimer);
+    await SESSION.del('bytes');
+    await SESSION.del('meta');
+  }
+  async function restoreSession() {
+    let meta, buf;
+    try {
+      meta = await SESSION.get('meta');
+      buf = await SESSION.get('bytes');
+    } catch (e) { return false; }
+    if (!meta || !buf || !buf.byteLength) return false;
+    restoringSession = true;
+    try {
+      state.fileName = meta.name || 'document.pdf';
+      state.fileSize = meta.size || buf.byteLength;
+      state.originalBytes = new Uint8Array(buf);
+      if (meta.themeId) { els.themeSelect.value = meta.themeId; converter.setTheme(meta.themeId); }
+      if (meta.colors) { converter.updateColorConfig(meta.colors); syncStudioWithTheme(converter.currentTheme); }
+      if (meta.engine) { state.activeEngine = meta.engine; els.engineSelect.value = meta.engine; }
+      await setupWorkspace();                       // re-renders + re-converts
+      if (meta.zoom) setZoom(meta.zoom, true);
+      if (meta.page && meta.page > 1) gotoPage(meta.page);
+      return true;
+    } catch (e) {
+      // stored doc is unreadable now — don't get stuck failing on every refresh
+      state.originalBytes = null;
+      await clearSession();
+      return false;
+    } finally {
+      restoringSession = false;
+    }
+  }
+
+  const invalidateConversion = () => { state.conversionFresh = false; schedulePersistMeta(); };
 
   let zoomDebounceTimer = null;
   function setZoom(pct, immediate = false) {
@@ -271,6 +371,7 @@
         viewer.setZoom(targetScale);
       }, 150);
     }
+    schedulePersistMeta();
   }
 
   function gotoPage(page) {
@@ -281,6 +382,7 @@
     els.btnPrevPage.disabled = page <= 1;
     els.btnNextPage.disabled = page >= state.pageCount;
     viewer.goToPage(page);
+    schedulePersistMeta();
     // A page jump converts immediately, not on the slider-drag debounce —
     // it's proportional to that one page alone, so on a 1000-page book this
     // is just as fast as on a 10-page one, and there's no reason to delay it.
@@ -567,6 +669,8 @@
     invalidateConversion();
     runPreview();
     scheduleFull();
+
+    persistDocument();                 // remember this doc for the next refresh
   }
 
   async function loadDemoPdf() {
