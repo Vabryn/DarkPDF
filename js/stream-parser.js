@@ -61,7 +61,8 @@
 
     parseHex(hex) {
       if (!hex) return { r: 0.09, g: 0.09, b: 0.10 };
-      const h = hex.replace('#', '');
+      let h = hex.replace('#', '').trim();
+      if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];   // #abc -> #aabbcc
       return {
         r: parseInt(h.substring(0, 2), 16) / 255,
         g: parseInt(h.substring(2, 4), 16) / 255,
@@ -133,6 +134,30 @@
       }
 
       if (oc.mode === 'tint') return [oc.rgb.r, oc.rgb.g, oc.rgb.b];
+
+      // A pale coloured fill is almost always a decorative page/section wash —
+      // Pearson-style banner bands, tinted callout boxes, cover panels.
+      // Inverting its lightness while keeping the full hue and saturation turns
+      // it into a glaring mid-tone (a faded olive becomes electric lime), so
+      // the paler the original, the more it collapses toward the dark ground
+      // with just a hint of its hue left. Deep, saturated fills — chart bars,
+      // badges, filled icons — sit at low/mid lightness and pass through
+      // essentially unchanged.
+      if (!isStroke && l > 0.45) {
+        const wash = clamp((l - 0.45) / 0.4, 0, 1);          // 0 by l=0.45, 1 by l>=0.85
+        const tint = this.hslToRgb(
+          h,
+          clamp(s * oc.saturation * (1 - 0.75 * wash), 0, 0.6),
+          clamp(1 - l, 0.28, 0.7)
+        );
+        const k = wash * 0.85;                               // blend toward the ground
+        return [
+          clamp(tint[0] * (1 - k) + bg.r * k + 0.02, 0, 1),
+          clamp(tint[1] * (1 - k) + bg.g * k + 0.02, 0, 1),
+          clamp(tint[2] * (1 - k) + bg.b * k + 0.025, 0, 1)
+        ];
+      }
+
       return this.hslToRgb(h, clamp(s * oc.saturation, 0, 1), clamp(1 - l, 0.32, 0.86));
     },
 

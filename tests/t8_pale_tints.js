@@ -21,9 +21,21 @@ const { StreamParser } = require('./_boot.js');
   c = rgbOf(run('BT 0.06 0.07 0.09 rg (x) Tj ET'));
   ok(lum(c) > 0.7, `near-black bluish body text -> light (lum ${lum(c).toFixed(3)})`);
 
+  // pale COLOURED washes (Pearson-style banner bands, tinted callouts) must
+  // calm down toward the dark ground instead of inverting into a glaring
+  // mid-tone — a faded olive/chartreuse band should not come back electric.
+  c = rgbOf(run('0.75 0.85 0.45 rg 0 0 10 10 re f'));
+  ok(lum(c) < 0.35, `pale olive band -> dark, calm (lum ${lum(c).toFixed(3)})`);
+  ok(chroma(c) < 0.18, `pale olive band loses most of its saturation (chroma ${chroma(c).toFixed(3)})`);
+
+  c = rgbOf(run('0.93 0.97 0.85 rg 0 0 10 10 re f'));
+  ok(lum(c) < 0.2 && chroma(c) < 0.06, `very pale green wash reads as background (lum ${lum(c).toFixed(3)}, chroma ${chroma(c).toFixed(3)})`);
+
   // genuinely saturated colours must STILL be treated as chromatic
   c = rgbOf(run('0.85 0.2 0.2 rg 0 0 10 10 re f'));
   ok(chroma(c) > 0.2, `saturated red object keeps chroma (${chroma(c).toFixed(3)})`);
+  c = rgbOf(run('0.15 0.35 0.7 rg 0 0 10 10 re f'));
+  ok(chroma(c) > 0.2, `deep blue fill (chart bar) keeps its colour (chroma ${chroma(c).toFixed(3)})`);
   c = rgbOf(run('BT 0.1 0.3 0.75 rg (x) Tj ET'));
   ok(chroma(c) > 0.2 && lum(c) > 0.35, `blue link text stays blue & readable (chroma ${chroma(c).toFixed(3)}, lum ${lum(c).toFixed(3)})`);
 
@@ -62,6 +74,13 @@ const { StreamParser } = require('./_boot.js');
   // tint mode — "unify vectors" should not repaint the page surface itself
   c = rgbOf(runTint('0.97 0.98 1 rg 0 0 10 10 re f'));
   ok(lum(c) < 0.18, `zebra-row fill stays bg-anchored in tint mode, not accent-coloured (lum ${lum(c).toFixed(3)})`);
+
+  // parseHex must expand #abc shorthand (a chromatic fill remap reads bg.b,
+  // which was NaN for a 3-digit bgHex and poisoned the output).
+  const sh = StreamParser.parseHex('#111');
+  ok(Number.isFinite(sh.r) && Number.isFinite(sh.g) && Number.isFinite(sh.b),
+     `parseHex('#111') -> finite channels (${JSON.stringify(sh)})`);
+  ok(Math.abs(sh.r - sh.b) < 1e-6, `parseHex('#111') expands evenly`);
 
   summary();
 })().catch(e => { console.error(e); process.exitCode = 1; });
