@@ -4,10 +4,25 @@ Convert a light PDF to dark **entirely in the browser** — no upload, no server
 no build step. Nothing is rasterised: the PDF's own structure is edited in
 place, so text stays selectable text and vectors stay vectors.
 
+**Live:** <https://darkpdf.riverakarom.com>
+
 pdf-lib and pdf.js are bundled in `js/vendor/` — the app makes **zero
 network requests** at runtime and runs fully offline. Stream re-compression
 uses the platform `CompressionStream`, so nothing else is vendored. A strict
 `Content-Security-Policy` is set in `index.html`.
+
+<p align="center">
+  <img src="docs/02-workspace.png" alt="Split view: the original light PDF on the left, the lossless dark conversion on the right, with a draggable divider" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/01-landing.png" alt="Drop-zone landing screen" width="49%">
+  <img src="docs/03-studio.png" alt="Customize drawer — background, text and vector-object colour controls" width="49%">
+</p>
+
+The right panel above is the **Customize** drawer: every stream parameter the
+converter uses is exposed as a live control, and the preview re-renders the real
+converted PDF as you drag.
 
 ## What is preserved
 
@@ -58,8 +73,11 @@ Responsive down to phone width (touch drag and zoom).
 
 ## Deploy
 
-Copy `index.html`, `css/` and `js/` to any static host (GitHub Pages, Netlify
-drop, Nginx). No backend, no build.
+Static assets only — no backend, no build. The live site runs on Cloudflare
+Workers static assets: `npx wrangler@4 deploy` from this folder. `.assetsignore`
+keeps `tests/`, `README.md`, `docs/` and `LICENSE` out of the bundle. Any other
+static host works too (GitHub Pages, Netlify drop, Nginx) — copy `index.html`,
+`css/` and `js/`.
 
 CJK PDFs: pdf.js character maps are not bundled (~1.3 MB). Most CJK PDFs embed
 their fonts and render fine; to enable the fallback, drop `pdfjs-dist/cmaps/`
@@ -84,7 +102,7 @@ scripts in `index.html`.
 cd tests && for t in t*.js size_calibration.js; do node "$t"; done
 ```
 
-8 suites / ~90 assertions prove, against generated PDFs:
+12 suites / 126 assertions prove, against generated PDFs:
 
 - the non-colour token stream is **byte-identical** after conversion — only colour changed
 - text, link annotations, form fields and bookmarks survive conversion
@@ -93,4 +111,6 @@ cd tests && for t in t*.js size_calibration.js; do node "$t"; done
 - inline-image binary and string-literal bytes are never spliced
 - ICCBased colours are remapped while Indexed / Separation are left alone
 - a 60-page document with a shared XObject converts in well under a second
+- a wall-to-wall image page (cover / full-bleed scan) is left exactly as-is —
+  no colour remap, no dark ground painted behind it
 - the output-size estimate band contains the real result across four file sizes
