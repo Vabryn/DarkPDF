@@ -349,6 +349,7 @@
       await clearSession();
       return false;
     } finally {
+      hideProgress();
       restoringSession = false;
     }
   }
@@ -650,6 +651,7 @@
       els.uploadSection.style.display = 'flex';
       state.originalBytes = null;
       state.srcDoc = null;
+      hideProgress();
       throw err;
     }
     // Read the page count defensively: whatever loadDocument returned, the
@@ -671,6 +673,7 @@
     scheduleFull();
 
     persistDocument();                 // remember this doc for the next refresh
+    hideProgress();
   }
 
   async function loadDemoPdf() {
