@@ -138,13 +138,18 @@
       }
     }
 
-    /** Inner size of the scroll container available for a page (minus padding). */
+    /** Inner size of the scroll container available for a page. */
     _availableBox() {
       const box = this.container.closest('.stage-viewport') || this.container;
       const cs = getComputedStyle(box);
       const px = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
       const py = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-      return { w: Math.max(120, box.clientWidth - px), h: Math.max(160, box.clientHeight - py) };
+      return {
+        w: Math.max(120, box.clientWidth - px),
+        h: Math.max(160, box.clientHeight - py),
+        fullW: Math.max(120, box.clientWidth),
+        fullH: Math.max(160, box.clientHeight)
+      };
     }
 
     /** target fit scale for a strategy, from cached page dimensions (no async). */
@@ -152,7 +157,7 @@
       if (!this._baseW || !this._baseH) return this.zoomScale;
       const box = this._availableBox();
       const s = strategy === 'width'
-        ? box.w / this._baseW
+        ? (box.fullW || box.w) / this._baseW
         : Math.min(box.w / this._baseW, box.h / this._baseH);
       return Math.max(0.25, Math.min(4, s));
     }
@@ -189,7 +194,7 @@
         const vp = (await this.pdfDoc.getPage(this.currentPage)).getViewport({ scale: 1 });
         this._baseW = vp.width; this._baseH = vp.height;
         const box = this._availableBox();
-        scale = strategy === 'width' ? box.w / vp.width : Math.min(box.w / vp.width, box.h / vp.height);
+        scale = strategy === 'width' ? (box.fullW || box.w) / vp.width : Math.min(box.w / vp.width, box.h / vp.height);
       } catch (e) { return; }
       scale = Math.max(0.25, Math.min(4, scale));
       // Consecutive pages are very often the same size, so the fit scale
