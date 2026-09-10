@@ -21,18 +21,21 @@ const fs = require('fs');
   const htmlPath = 'file://' + path.resolve(__dirname, '../index.html');
   await page.goto(htmlPath, { waitUntil: 'networkidle0' });
 
-  // 1. Initial State: hidden, idle
+  // 1. Initial State: hidden, idle, bridge removed
   const initState = await page.evaluate(() => {
     const el = document.getElementById('renderWidget');
+    const bridge = el.querySelector('.bridge');
     return {
       hidden: el.hidden,
       state: el.dataset.state,
-      pctText: document.getElementById('renderWidgetPct').textContent.trim()
+      pctText: document.getElementById('renderWidgetPct').textContent.trim(),
+      hasBridge: !!bridge
     };
   });
   ok(initState.hidden, 'widget initially hidden');
   eq(initState.state, 'idle', 'widget initially idle');
   eq(initState.pctText, '0%', 'initial pct is 0%');
+  eq(initState.hasBridge, false, 'center progress line bar (bridge) is completely removed');
 
   // 2. Show & Progress through 0%, 45%, 100%
   // Test 0%
@@ -43,14 +46,11 @@ const fs = require('fs');
     rw.dataset.state = 'running';
     const drain = document.getElementById('renderWidgetDrain');
     const fill = document.getElementById('renderWidgetFill');
-    const pulse = document.getElementById('renderWidgetPulse');
     const pct = document.getElementById('renderWidgetPct');
     
     // Simulate setRenderProgress(0)
     drain.style.height = '100%';
     fill.style.height = '0%';
-    pulse.style.left = '0px';
-    pulse.style.opacity = '0';
     pct.textContent = '0%';
   });
   await new Promise(r => setTimeout(r, 100));
@@ -75,13 +75,10 @@ const fs = require('fs');
   await page.evaluate(() => {
     const drain = document.getElementById('renderWidgetDrain');
     const fill = document.getElementById('renderWidgetFill');
-    const pulse = document.getElementById('renderWidgetPulse');
     const pct = document.getElementById('renderWidgetPct');
     
     drain.style.height = '55%';
     fill.style.height = '45%';
-    pulse.style.left = 'calc(45% * 14px / 100)';
-    pulse.style.opacity = '1';
     pct.textContent = '45%';
   });
   await new Promise(r => setTimeout(r, 100));
@@ -89,17 +86,14 @@ const fs = require('fs');
   const at45 = await page.evaluate(() => {
     const drain = document.getElementById('renderWidgetDrain');
     const fill = document.getElementById('renderWidgetFill');
-    const pulse = document.getElementById('renderWidgetPulse');
     return {
       drainH: drain.style.height,
       fillH: fill.style.height,
-      pulseOpacity: pulse.style.opacity,
       pct: document.getElementById('renderWidgetPct').textContent.trim()
     };
   });
   eq(at45.drainH, '55%', '45% progress: drain is 55% height');
   eq(at45.fillH, '45%', '45% progress: fill is 45% height');
-  eq(at45.pulseOpacity, '1', '45% progress: pulse is active on bridge');
   eq(at45.pct, '45%', '45% progress: text is 45%');
 
   // Screenshot at 45%
@@ -110,13 +104,10 @@ const fs = require('fs');
     const rw = document.getElementById('renderWidget');
     const drain = document.getElementById('renderWidgetDrain');
     const fill = document.getElementById('renderWidgetFill');
-    const pulse = document.getElementById('renderWidgetPulse');
     const pct = document.getElementById('renderWidgetPct');
     
     drain.style.height = '0%';
     fill.style.height = '100%';
-    pulse.style.left = '14px';
-    pulse.style.opacity = '0';
     pct.textContent = '100%';
     rw.dataset.state = 'complete';
   });

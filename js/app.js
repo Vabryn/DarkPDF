@@ -41,7 +41,7 @@
     'studioObjColor', 'studioObjHex', 'toggleObjRecolor', 'sliderObjSaturation', 'valObjSaturation',
     'sliderObjBorder', 'valObjBorder',
     'progressModal', 'progressBar', 'progressPercent', 'progressStatus', 'btnCancelProgress',
-    'renderWidget', 'renderWidgetDrain', 'renderWidgetFill', 'renderWidgetPulse', 'renderWidgetLight', 'renderWidgetPct'
+    'renderWidget', 'renderWidgetDrain', 'renderWidgetFill', 'renderWidgetLight', 'renderWidgetPct'
   ].forEach((id) => { els[id] = document.getElementById(id); });
 
   let converter, viewer;
@@ -579,9 +579,8 @@
 
   /* ---- conversion progress widget -----------------------------------------
      Clean Transfer animation: source light document drains while destination
-     dark document fills in direct proportion to conversion progress. Pulse shoots
-     across bridge. Completes a single loop (bump + flash) only when percentage
-     finishes at 100%. */
+     dark document fills in direct proportion to conversion progress. Completes
+     a single loop (bump + flash) only when percentage finishes at 100%. */
   let rwFadeTimers = [];
   function clearRenderTimers() { rwFadeTimers.forEach(clearTimeout); rwFadeTimers = []; }
 
@@ -598,15 +597,9 @@
       els.renderWidgetFill.style.transition = 'none';
       els.renderWidgetFill.style.height = '0%';
     }
-    if (els.renderWidgetPulse) {
-      els.renderWidgetPulse.style.transition = 'none';
-      els.renderWidgetPulse.style.left = '0%';
-      els.renderWidgetPulse.style.opacity = '0';
-    }
     void els.renderWidget.offsetWidth; // flush the snap
     if (els.renderWidgetDrain) els.renderWidgetDrain.style.transition = '';
     if (els.renderWidgetFill) els.renderWidgetFill.style.transition = '';
-    if (els.renderWidgetPulse) els.renderWidgetPulse.style.transition = '';
     els.renderWidget.dataset.state = 'running';
     setRenderProgress(0);
   }
@@ -618,11 +611,6 @@
     const fillH = p;
     if (els.renderWidgetDrain) els.renderWidgetDrain.style.height = `${drainH}%`;
     if (els.renderWidgetFill) els.renderWidgetFill.style.height = `${fillH}%`;
-    if (els.renderWidgetPulse) {
-      // Bridge track is 22px, pulse is 8px; travel range is 14px (22px - 8px)
-      els.renderWidgetPulse.style.left = `calc(${p}% * 14px / 100)`;
-      els.renderWidgetPulse.style.opacity = (p > 2 && p < 98) ? '1' : (p > 0 ? '0.6' : '0');
-    }
     els.renderWidget.style.setProperty('--progress', `${p}%`);
     els.renderWidget.setAttribute('aria-valuenow', Math.round(p));
     if (els.renderWidgetPct) els.renderWidgetPct.textContent = `${Math.round(p)}%`;
@@ -634,7 +622,6 @@
     clearRenderTimers();
     if (!els.renderWidget) return;
     setRenderProgress(100);
-    if (els.renderWidgetPulse) els.renderWidgetPulse.style.opacity = '0';
     els.renderWidget.dataset.state = 'complete';
     rwFadeTimers.push(setTimeout(() => { els.renderWidget.dataset.state = 'fading'; }, 800));
     rwFadeTimers.push(setTimeout(hideRenderProgress, 1300));

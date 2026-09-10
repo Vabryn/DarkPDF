@@ -206,35 +206,6 @@ body {
   transition: opacity 0.2s ease;
 }
 
-/* --- THE BRIDGE --- */
-.bridge {
-  width: 22px;
-  height: 2px;
-  position: relative;
-  flex-shrink: 0;
-}
-
-.track {
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 1px;
-}
-
-.pulse {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 8px;
-  height: 100%;
-  background: #FFF;
-  box-shadow: 0 0 6px #FFF;
-  border-radius: 1px;
-  opacity: 0;
-  will-change: left, opacity;
-  transition: left 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease;
-}
-
 /* --- THE BLOOM --- */
 .dest-frame {
   transform-origin: center;
@@ -307,8 +278,6 @@ body {
   .rw-stage { gap: 6px; }
   .icon-frame { width: 20px; height: 27px; }
   .content { width: 20px; height: 27px; }
-  .bridge { width: 16px; }
-  .pulse { width: 6px; }
 }
 
 @media (max-width: 380px) {
@@ -317,7 +286,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .rw-panel { animation: none; }
-  .mask, .pulse, .dest-frame { transition: none; }
+  .mask, .dest-frame { transition: none; }
 }
 
 .header-status {
