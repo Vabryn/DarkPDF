@@ -43,12 +43,15 @@ const eq = (a, b, msg) => ok(a === b, `${msg} (got ${JSON.stringify(a)}, want ${
   });
   eq(initialLabel, 'Converting', 'default label in DOM is Converting');
 
-  // Load sample demo PDF
+  // Load sample demo PDF and wait for workspace to be visible
   await page.evaluate(() => {
     const demoBtn = document.querySelector('.drop-cta-group button:last-child');
     if (demoBtn) demoBtn.click();
   });
-  await new Promise(r => setTimeout(r, 600));
+  await page.waitForFunction(() => {
+    const ws = document.getElementById('workspace');
+    return ws && ws.style.display !== 'none';
+  }, { timeout: 8000 });
 
   // Now trigger a customization change (e.g. adjust slider or color)
   const duringChange = await page.evaluate(() => {
@@ -69,14 +72,34 @@ const eq = (a, b, msg) => ok(a === b, `${msg} (got ${JSON.stringify(a)}, want ${
   ok(duringChange.ariaLabel && duringChange.ariaLabel.includes('Customizing'),
     `aria-label updated to Customizing (${duringChange.ariaLabel})`);
 
-  // Take screenshots
-  const artifactDir = '/Users/karomrivera/.gemini/antigravity-ide/brain/f6025319-5cbf-4e72-b28b-a5c8cc6b6df9';
-  await page.screenshot({ path: path.join(artifactDir, 'darkpdf_customizing_desktop.png') });
+  // Click Return to upload (back button)
+  await page.evaluate(() => {
+    const backBtn = document.getElementById('btnNewDoc');
+    if (backBtn) backBtn.click();
+  });
+  await page.waitForFunction(() => {
+    const up = document.getElementById('uploadSection');
+    return up && up.style.display !== 'none';
+  }, { timeout: 5000 });
 
-  // Check mobile viewport
-  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
-  await new Promise(r => setTimeout(r, 300));
-  await page.screenshot({ path: path.join(artifactDir, 'darkpdf_customizing_mobile.png') });
+  const afterBack = await page.evaluate(() => {
+    const rw = document.getElementById('renderWidget');
+    const upload = document.getElementById('uploadSection');
+    const cs = window.getComputedStyle(rw);
+    return {
+      hiddenAttr: rw ? rw.hidden : null,
+      display: cs.display,
+      uploadVisible: upload && window.getComputedStyle(upload).display !== 'none'
+    };
+  });
+
+  ok(afterBack.uploadVisible, 'upload section is visible after pressing back');
+  ok(afterBack.hiddenAttr === true, 'renderWidget hidden attribute is true after back');
+  eq(afterBack.display, 'none', 'renderWidget computed display is none on homescreen');
+
+  // Take screenshot of clean homescreen
+  const artifactDir = '/Users/karomrivera/.gemini/antigravity-ide/brain/f6025319-5cbf-4e72-b28b-a5c8cc6b6df9';
+  await page.screenshot({ path: path.join(artifactDir, 'darkpdf_homescreen_after_back.png') });
 
   await browser.close();
   console.log(`\n${FAIL ? '\x1b[31m' : '\x1b[32m'}${PASS} passed, ${FAIL} failed\x1b[0m\n`);

@@ -159,11 +159,15 @@
 
     els.btnDemo.addEventListener('click', loadDemoPdf);
     els.btnNewDoc.addEventListener('click', () => {
-      els.workspace.style.display = 'none';
-      els.uploadSection.style.display = 'flex';
-      els.fileInput.value = '';
-      state.originalBytes = null;
-      clearSession();
+      exitToLanding();
+      if (window.history && window.history.state && window.history.state.darkPdfLoaded) {
+        window.history.back();
+      }
+    });
+    window.addEventListener('popstate', () => {
+      if (els.workspace && els.workspace.style.display !== 'none') {
+        exitToLanding();
+      }
     });
     // open a different PDF without leaving the workspace
     els.btnOpenDoc.addEventListener('click', () => { els.fileInput.value = ''; els.fileInput.click(); });
@@ -645,6 +649,28 @@
     if (els.renderWidgetLabel) els.renderWidgetLabel.textContent = 'Converting';
   }
 
+  function exitToLanding() {
+    fullToken++;
+    previewToken++;
+    clearTimeout(previewTimer);
+    clearTimeout(fullTimer);
+    clearTimeout(zoomDebounceTimer);
+    clearTimeout(metaSaveTimer);
+    if (converter && converter.abortWorker) {
+      try { converter.abortWorker(); } catch (e) {}
+    }
+    hideRenderProgress();
+    hideProgress();
+    if (els.colorStudioDrawer) els.colorStudioDrawer.classList.remove('open');
+    if (els.workspace) els.workspace.style.display = 'none';
+    if (els.uploadSection) els.uploadSection.style.display = 'flex';
+    if (els.fileInput) els.fileInput.value = '';
+    state.originalBytes = null;
+    state.convertedBytes = null;
+    state.srcDoc = null;
+    clearSession();
+  }
+
   // Verify the conversion changed only colour — warn (once) if anything else moved.
   async function runRetention(convResult, token) {
     if (!window.RetentionCheck || !window.pdfjsLib) return;
@@ -758,6 +784,12 @@
     invalidateConversion();
     runPreview();
     scheduleFull();
+
+    try {
+      if (window.history && (!window.history.state || !window.history.state.darkPdfLoaded)) {
+        window.history.pushState({ darkPdfLoaded: true }, '');
+      }
+    } catch (e) {}
 
     persistDocument();                 // remember this doc for the next refresh
     hideProgress();

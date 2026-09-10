@@ -115,7 +115,11 @@ body {
   animation: rw-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   transition: opacity 0.45s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.rw-panel[hidden] { display: none !important; }
+.rw-panel[hidden],
+body:has(#uploadSection:not([style*="display: none"])) .rw-panel,
+body:has(#workspace[style*="display: none"]) .rw-panel {
+  display: none !important;
+}
 .rw-panel[data-state="fading"] { opacity: 0; }
 
 /* --- ICONS & STAGE --- */
