@@ -31,7 +31,7 @@
     'uploadSection', 'dropZone', 'fileInput', 'btnUpload', 'btnDemo',
     'workspace', 'viewerContainer',
     'docTitle', 'docMeta', 'btnNewDoc', 'btnOpenDoc', 'btnDownload', 'sizeChip',
-    'themeSelect', 'btnToggleStudio',
+    'themeSelect', 'btnToggleStudio', 'rememberDocument',
     'zoomSlider', 'zoomVal', 'btnZoomReset', 'btnZoomFill', 'btnZoomActual',
     'btnPrevPage', 'btnNextPage', 'pageInput', 'pageTotalDisplay',
     'colorStudioDrawer', 'btnCloseStudio', 'btnResetStudio',
@@ -142,6 +142,10 @@
   }
 
   function bindEvents() {
+    els.rememberDocument.addEventListener('change', async () => {
+      if (els.rememberDocument.checked) await persistDocument();
+      else await clearSession();
+    });
     els.btnUpload.addEventListener('click', () => els.fileInput.click());
     els.fileInput.addEventListener('change', (e) => { if (e.target.files[0]) loadPdfFile(e.target.files[0]); });
 
@@ -281,13 +285,9 @@
     scheduleRefresh();
   }
 
-  /* ---- session persistence -------------------------------------------------
-     A refresh (accidental or not) should drop you back on the same document,
-     not the upload screen. The original PDF bytes live in IndexedDB (too big
-     for localStorage); the light settings live alongside. The converted output
-     is never stored — it's regenerated from the original + settings on
-     restore. Everything stays on this device; "Open a different PDF" /
-     leaving the workspace clears it. */
+  /* Original bytes and settings are stored only after an explicit device-storage
+     choice. Existing saved sessions remain restorable. Store document + metadata
+     atomically so an interrupted write cannot pair two different documents. */
   const SESSION = (() => {
     const DB = 'darkpdf-session', STORE = 'kv';
     let dbp = null;
@@ -313,8 +313,9 @@
     };
     return {
       get: (k) => run('readonly', (s) => s.get(k)).catch(() => undefined),
-      put: (k, v) => run('readwrite', (s) => s.put(v, k)).catch(() => {}),
-      del: (k) => run('readwrite', (s) => s.delete(k)).catch(() => {})
+      put: (k, v) => run('readwrite', (s) => s.put(v, k)),
+      save: (bytes, meta) => run('readwrite', (s) => { s.put(bytes, 'bytes'); s.put(meta, 'meta'); }),
+      clear: () => run('readwrite', (s) => s.clear())
     };
   })();
 
@@ -329,22 +330,28 @@
   }
   let metaSaveTimer = null;
   function schedulePersistMeta() {
-    if (!state.originalBytes) return;
+    if (!state.originalBytes || !els.rememberDocument.checked) return;
     clearTimeout(metaSaveTimer);
-    metaSaveTimer = setTimeout(() => { SESSION.put('meta', collectSessionMeta()); }, 500);
+    metaSaveTimer = setTimeout(() => {
+      if (state.originalBytes && els.rememberDocument.checked) {
+        SESSION.put('meta', collectSessionMeta()).catch(() => toast('Could not save your latest settings on this device.', 'error'));
+      }
+    }, 500);
   }
   let restoringSession = false;
   async function persistDocument() {
-    if (!state.originalBytes || restoringSession) return;   // no re-write of what we just restored
+    if (!state.originalBytes || restoringSession || !els.rememberDocument.checked) return;
     try {
-      await SESSION.put('bytes', state.originalBytes.slice().buffer);
-      await SESSION.put('meta', collectSessionMeta());
-    } catch (e) { /* private mode / quota — just skip persistence */ }
+      await SESSION.save(state.originalBytes.slice().buffer, collectSessionMeta());
+    } catch (e) {
+      els.rememberDocument.checked = false;
+      toast('Could not save this PDF on your device. Keep this tab open to continue working.', 'error');
+    }
   }
   async function clearSession() {
     clearTimeout(metaSaveTimer);
-    await SESSION.del('bytes');
-    await SESSION.del('meta');
+    try { await SESSION.clear(); }
+    catch (e) { toast('Could not clear saved data. Use your browser’s site-data settings to remove it.', 'error'); }
   }
   async function restoreSession() {
     let meta, buf;
@@ -354,6 +361,7 @@
     } catch (e) { return false; }
     if (!meta || !buf || !buf.byteLength) return false;
     restoringSession = true;
+    els.rememberDocument.checked = true;
     try {
       state.fileName = meta.name || 'document.pdf';
       state.fileSize = meta.size || buf.byteLength;
@@ -668,6 +676,7 @@
     state.originalBytes = null;
     state.convertedBytes = null;
     state.srcDoc = null;
+    els.rememberDocument.checked = false;
     clearSession();
   }
 
@@ -688,6 +697,7 @@
       }
     } catch (e) {
       console.warn('retention check failed', e);
+      if (token === fullToken) toast('Preservation could not be verified. Compare the original and export before relying on it.', 'error');
     }
   }
 
@@ -714,6 +724,8 @@
 
   /* ---- load / setup ---- */
   async function loadPdfFile(file) {
+    els.rememberDocument.checked = false;
+    await clearSession();
     try {
       showProgress('Reading PDF document...');
       state.fileName = file.name;
@@ -791,11 +803,13 @@
       }
     } catch (e) {}
 
-    persistDocument();                 // remember this doc for the next refresh
+    persistDocument();                 // only when device storage is enabled
     hideProgress();
   }
 
   async function loadDemoPdf() {
+    els.rememberDocument.checked = false;
+    await clearSession();
     try {
       showProgress('Building sample PDF...');
       state.coverPages = new Set();

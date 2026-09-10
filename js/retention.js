@@ -43,45 +43,47 @@
       if (window.__DARKPDF_HAS_CMAPS__) { params.cMapUrl = 'js/vendor/cmaps/'; params.cMapPacked = true; }
       const doc = await pdfjsLib.getDocument(params).promise;
 
-      const total = doc.numPages;
-      const pages = samplePages(total, maxPages);
-      const perPageText = {};
-      let textLen = 0, links = 0, widgets = 0, images = 0;
+      try {
+        const total = doc.numPages;
+        const pages = samplePages(total, maxPages);
+        const perPageText = {};
+        let textLen = 0, links = 0, widgets = 0, images = 0;
 
-      for (let idx = 0; idx < pages.length; idx++) {
-        const page = await doc.getPage(pages[idx]);
+        for (let idx = 0; idx < pages.length; idx++) {
+          const page = await doc.getPage(pages[idx]);
 
-        const tc = await page.getTextContent();
-        let s = '';
-        for (const it of tc.items) s += (it.str || '') + (it.hasEOL ? '\n' : '');
-        perPageText[pages[idx]] = norm(s);
-        textLen += perPageText[pages[idx]].length;
+          const tc = await page.getTextContent();
+          let s = '';
+          for (const it of tc.items) s += (it.str || '') + (it.hasEOL ? '\n' : '');
+          perPageText[pages[idx]] = norm(s);
+          textLen += perPageText[pages[idx]].length;
 
-        try {
-          for (const a of await page.getAnnotations()) {
-            if (a.subtype === 'Link') links++;
-            else if (a.subtype === 'Widget') widgets++;
-          }
-        } catch (e) {}
-
-        if (idx < imgPages) {
           try {
-            const O = pdfjsLib.OPS;
-            for (const fn of (await page.getOperatorList()).fnArray) {
-              if (fn === O.paintImageXObject || fn === O.paintInlineImageXObject ||
-                  fn === O.paintImageMaskXObject || fn === O.paintJpegXObject ||
-                  fn === O.paintImageXObjectRepeat) images++;
+            for (const a of await page.getAnnotations()) {
+              if (a.subtype === 'Link') links++;
+              else if (a.subtype === 'Widget') widgets++;
             }
-          } catch (e) {}
+          } catch (e) { throw new Error('Cannot verify PDF annotations: ' + e.message); }
+
+          if (idx < imgPages) {
+            try {
+              const O = pdfjsLib.OPS;
+              for (const fn of (await page.getOperatorList()).fnArray) {
+                if (fn === O.paintImageXObject || fn === O.paintInlineImageXObject ||
+                    fn === O.paintImageMaskXObject || fn === O.paintJpegXObject ||
+                    fn === O.paintImageXObjectRepeat) images++;
+              }
+            } catch (e) { throw new Error('Cannot verify PDF image operators: ' + e.message); }
+          }
         }
+
+        const outline = countOutline(await doc.getOutline());
+
+        return { total, pagesChecked: pages, imgPagesChecked: Math.min(imgPages, pages.length),
+                 textLen, links, widgets, images, outline, perPageText, size: bytes.length };
+      } finally {
+        await doc.destroy();
       }
-
-      let outline = 0;
-      try { outline = countOutline(await doc.getOutline()); } catch (e) {}
-      try { await doc.destroy(); } catch (e) {}
-
-      return { total, pagesChecked: pages, imgPagesChecked: Math.min(imgPages, pages.length),
-               textLen, links, widgets, images, outline, perPageText, size: bytes.length };
     },
 
     compare(before, after) {
@@ -99,8 +101,8 @@
           textMatch === n ? 'every sampled page' : `${n - textMatch} differ`);
       row('Text characters', before.textLen.toLocaleString(), after.textLen.toLocaleString(),
           after.textLen >= before.textLen - 2, 'sampled');
-      row('Link annotations', before.links, after.links, after.links >= before.links);
-      row('Form fields', before.widgets, after.widgets, after.widgets >= before.widgets);
+      row('Link annotations', before.links, after.links, after.links === before.links);
+      row('Form fields', before.widgets, after.widgets, after.widgets === before.widgets);
       row('Image draws', before.images, after.images, after.images === before.images,
           `${before.imgPagesChecked} pages sampled`);
       row('Bookmarks', before.outline, after.outline, after.outline === before.outline);

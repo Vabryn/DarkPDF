@@ -1,5 +1,4 @@
-let puppeteer;
-try { puppeteer = require('puppeteer'); } catch (e) { puppeteer = require('/Users/karomrivera/Documents/Sync/Repository/Ledger/node_modules/puppeteer'); }
+const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
 
@@ -12,6 +11,7 @@ const fs = require('fs');
   };
   const eq = (a, b, msg) => ok(a === b, `${msg} (got ${JSON.stringify(a)}, want ${JSON.stringify(b)})`);
 
+  const server = await require('./server.cjs').start();
   const browser = await puppeteer.launch({
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -19,7 +19,7 @@ const fs = require('fs');
 
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 2 });
-  const htmlPath = 'file://' + path.resolve(__dirname, '../index.html');
+  const htmlPath = server.url;
   await page.goto(htmlPath, { waitUntil: 'networkidle0' });
 
   // 1. Initial State: hidden, idle, bridge removed
@@ -69,7 +69,8 @@ const fs = require('fs');
   eq(at0.fillH, '0%', '0% progress: fill is 0% height');
   eq(at0.pct, '0%', '0% progress: text is 0%');
 
-  const artifactDir = '/Users/karomrivera/.gemini/antigravity-ide/brain/f6025319-5cbf-4e72-b28b-a5c8cc6b6df9';
+  const artifactDir = process.env.AUDIT_SCREENSHOTS || path.join(require('os').tmpdir(), 'darkpdf-tests');
+  fs.mkdirSync(artifactDir, {recursive: true});
   await page.screenshot({ path: path.join(artifactDir, 'darkpdf_transfer_0pct.png') });
 
   // Test 45%
@@ -163,6 +164,7 @@ const fs = require('fs');
   await page.screenshot({ path: path.join(artifactDir, 'darkpdf_transfer_mobile_45pct.png') });
 
   await browser.close();
+  server.close();
   console.log(`\n${FAIL ? '\x1b[31m' : '\x1b[32m'}${PASS} passed, ${FAIL} failed\x1b[0m\n`);
   process.exitCode = FAIL ? 1 : 0;
 })();

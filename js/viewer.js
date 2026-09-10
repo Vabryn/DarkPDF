@@ -56,7 +56,7 @@
             <div class="page-container light-container" id="lightContainer"><canvas id="canvasLight" class="pdf-canvas"></canvas></div>
             <div class="page-container dark-container" id="darkContainer"><canvas id="canvasDark" class="pdf-canvas"></canvas></div>
             <div id="textLayer" class="textLayer"></div>
-            <div class="split-slider" id="splitSlider" role="slider" aria-label="Compare original vs converted" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" title="Drag to compare original vs converted">
+            <div class="split-slider" id="splitSlider" role="slider" tabindex="0" aria-label="Compare original vs converted" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" title="Drag to compare original vs converted">
               <div class="slider-line"></div>
               <div class="slider-handle">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>
@@ -67,7 +67,7 @@
               <svg class="badge-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
               <span>Full-Page Image (Preserved)</span>
             </div>
-            <div class="view-badge dark-badge" id="darkBadge">Lossless Dark</div>
+            <div class="view-badge dark-badge" id="darkBadge">Converted Dark</div>
           </div>
         </div>`;
 
@@ -106,6 +106,12 @@
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
       };
+      this.splitSlider.addEventListener('keydown', (e) => {
+        const positions = { ArrowLeft: this.sliderPosition - 5, ArrowRight: this.sliderPosition + 5, Home: 0, End: 100 };
+        if (!(e.key in positions)) return;
+        e.preventDefault();
+        this.setSliderPosition(Math.max(0, Math.min(100, positions[e.key])));
+      });
       this.splitSlider.addEventListener('mousedown', onDown);
       this.splitSlider.addEventListener('touchstart', onDown, { passive: false });
       window.addEventListener('mousemove', onMove);
@@ -477,7 +483,7 @@
 
       await this._renderTextLayer(page, vp, token);
 
-      this.darkBadge.textContent = this.darkIsPreview ? 'Dark (live preview)' : 'Lossless Dark';
+      this.darkBadge.textContent = this.darkIsPreview ? 'Dark (live preview)' : 'Converted Dark';
       this._updateBadges();
       if (this.viewMode === 'split') this.setSliderPosition(this.sliderPosition);
     }

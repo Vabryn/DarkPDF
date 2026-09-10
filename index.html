@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob:; worker-src 'self' blob:; object-src 'self' blob:; base-uri 'none'; form-action 'none'">
-  <title>DarkPDF — Lossless PDF Dark Mode</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>DarkPDF — PDF Dark Mode</title>
   <meta name="description" content="In-browser, zero-upload PDF dark mode converter. Retains native vector glyphs, selectable text, and hyperlinks.">
   <link rel="stylesheet" href="css/pdf_viewer.min.css">
   <link rel="stylesheet" href="css/styles.css">
@@ -81,7 +81,7 @@
   <main id="uploadSection" class="upload-view">
     <div class="hero-container">
       <div class="hero-meta"><span class="hero-tag">In-Browser Utility</span></div>
-      <h1 class="hero-headline"><span class="glow-light">Light</span> to Dark, Losslessly.</h1>
+      <h1 class="hero-headline"><span class="glow-light">Light</span> to Dark. Keep Text Selectable.</h1>
       <p class="hero-subtext">
         Transforms PDFs into high-contrast dark documents in your browser. Preserves selectable text, hyperlinks, font glyphs, and vector sharpness without rasterizing to images.
       </p>
@@ -138,7 +138,7 @@
 
       <div class="nav-cluster-right">
         <span id="sizeChip" class="size-chip" title="Estimated output size (updates to the real size after conversion)">&mdash;</span>
-        <button id="btnDownload" class="btn btn-solid btn-compact" title="Export lossless dark PDF">
+        <button id="btnDownload" class="btn btn-solid btn-compact" title="Export dark PDF">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span>Export Dark PDF</span>
         </button>
@@ -161,7 +161,9 @@
           <span>Customize</span>
         </button>
       </div>
-
+      <label class="remember-document" title="Stores the original PDF and settings in this browser until you uncheck this or return to upload.">
+        <input type="checkbox" id="rememberDocument"> Remember PDF on this device
+      </label>
     </div>
 
     <!-- Zoom bar (centered) -->

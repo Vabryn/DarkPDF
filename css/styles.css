@@ -1620,3 +1620,9 @@ kbd {
   .pager-input { width: 3.25em; }
   .page-pill .pager-input { width: 3.5em; }
 }
+
+/* Keep the storage choice readable without adding another settings panel. */
+.remember-document { display: flex; align-items: center; gap: 8px; font-size: 12px; min-height: 44px; cursor: pointer; }
+.remember-document input { width: 18px; height: 18px; accent-color: var(--accent, #60a5fa); }
+.workspace-subnav { flex-wrap: wrap; }
+.split-slider:focus-visible .slider-handle { outline: 3px solid #60a5fa; outline-offset: 3px; }

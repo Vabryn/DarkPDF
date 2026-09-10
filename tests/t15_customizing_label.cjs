@@ -1,5 +1,6 @@
-const puppeteer = require('/Users/karomrivera/Documents/Sync/Repository/Ledger/node_modules/puppeteer');
+const puppeteer = require('puppeteer');
 const path = require('path');
+const fs = require('fs');
 
 let PASS = 0, FAIL = 0;
 const ok = (c, msg) => { if (c) { PASS++; console.log('  ok  ' + msg); } else { FAIL++; console.error('  FAIL ' + msg); } };
@@ -8,13 +9,14 @@ const eq = (a, b, msg) => ok(a === b, `${msg} (got ${JSON.stringify(a)}, want ${
 (async () => {
   console.log('\n=== TEST 15: Converting vs Customizing label & unboxed rw-panel ===');
 
+  const server = await require('./server.cjs').start();
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1200, height: 800, deviceScaleFactor: 2 });
-  await page.goto('file:///Users/karomrivera/Documents/Sync/Repository/DarkPDF/index.html', { waitUntil: 'networkidle0' });
+  await page.goto(server.url, { waitUntil: 'networkidle0' });
 
   // Verify .rw-panel has no border, rounded corners, or background box
   const panelStyles = await page.evaluate(() => {
@@ -98,10 +100,12 @@ const eq = (a, b, msg) => ok(a === b, `${msg} (got ${JSON.stringify(a)}, want ${
   eq(afterBack.display, 'none', 'renderWidget computed display is none on homescreen');
 
   // Take screenshot of clean homescreen
-  const artifactDir = '/Users/karomrivera/.gemini/antigravity-ide/brain/f6025319-5cbf-4e72-b28b-a5c8cc6b6df9';
+  const artifactDir = process.env.AUDIT_SCREENSHOTS || path.join(require('os').tmpdir(), 'darkpdf-tests');
+  fs.mkdirSync(artifactDir, {recursive: true});
   await page.screenshot({ path: path.join(artifactDir, 'darkpdf_homescreen_after_back.png') });
 
   await browser.close();
+  server.close();
   console.log(`\n${FAIL ? '\x1b[31m' : '\x1b[32m'}${PASS} passed, ${FAIL} failed\x1b[0m\n`);
   if (FAIL) process.exitCode = 1;
 })();

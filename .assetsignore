@@ -6,3 +6,8 @@ README.md
 tests
 LICENSE
 docs
+
+node_modules
+package.json
+package-lock.json
+AUDIT.md
