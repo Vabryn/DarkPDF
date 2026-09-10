@@ -92,45 +92,50 @@ body {
 }
 
 /* ── Conversion progress widget ─────────────────────────────────────────────
-   Replaces the old header progress bar. A miniature page pinned to the corner
-   of the stage: the light sheet on top is clipped away left-to-right, revealing
-   the converted dark sheet beneath it. The wipe position IS the percentage, so
-   the animation is the progress bar rather than a decoration beside one.
-   Everything here is namespaced `rw-` — the source design used bare .card /
-   .row / .header / .light / .dark, which would collide badly in this sheet. */
+   A miniature page wipe progress indicator positioned in the center of the top
+   header, directly above the Split / Dark / Light segmented control.
+   The light sheet on top is clipped away left-to-right, revealing the converted
+   dark sheet beneath it. The wipe position IS the percentage. */
 .rw-panel {
   position: absolute;
-  right: 18px;
-  bottom: 18px;
-  z-index: 55;                      /* over the canvas, under the page pill + drawer */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 105;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
+  padding: 4px 10px 4px 6px;
+  background: rgba(24, 24, 28, 0.88);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   pointer-events: none;             /* never steals a click from the document */
-  animation: rw-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: rw-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   transition: opacity 0.45s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.rw-panel[hidden] { display: none; }
+.rw-panel[hidden] { display: none !important; }
 .rw-panel[data-state="fading"] { opacity: 0; }
 
-/* The 220x300 artboard is kept at its native size and scaled down as one
-   piece, so the proportions stay exactly as designed. RW_SCALE = 0.53. */
+/* Scaled down cleanly to fit inside the 52px top header.
+   220x300 native artboard scaled at 0.113333 = ~25px x 34px. */
 .rw-frame {
   position: relative;
-  width: 117px;                     /* 220 * 0.53 */
-  height: 159px;                    /* 300 * 0.53 */
+  width: 25px;
+  height: 34px;
+  flex-shrink: 0;
 }
 .rw-stage {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  left: 0;
+  top: 0;
   width: 220px;
   height: 300px;
-  transform: scale(0.53);
-  transform-origin: bottom right;
+  transform: scale(0.113333);
+  transform-origin: top left;
   border-radius: 12px;
-  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
   /* mirrors the top sheet's colour so the rounded corners never show a seam
      mid-wipe; it crossfades to the dark page as the wipe completes */
   background-color: #ffffff;
@@ -204,25 +209,32 @@ body {
 
 .rw-caption {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
-.rw-pct { color: var(--text-secondary); }
+.rw-label { color: var(--text-tertiary); }
+.rw-pct { font-weight: 600; color: var(--text-pure); min-width: 26px; }
 
 @keyframes rw-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.96); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 4px)) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
 }
 
 @media (min-width: 769px) {
-  .workspace:has(.studio-drawer.open) .rw-panel { right: calc(18px + 320px); }
+  body:has(.studio-drawer.open) .rw-panel {
+    transform: translate(calc(-50% - 160px), -50%);
+  }
 }
-@media (max-width: 560px) {
-  .rw-panel { right: 12px; bottom: 12px; }
-  .rw-frame { width: 84px; height: 114px; }     /* 220/300 * 0.38 */
-  .rw-stage { transform: scale(0.38); }
+
+@media (max-width: 480px) {
+  .rw-label { display: none; }
+  .rw-panel { padding: 3px 8px 3px 4px; gap: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -492,6 +504,21 @@ body {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+@media (min-width: 769px) {
+  .nav-cluster-left {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .nav-cluster-right {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: flex-end;
+  }
+  .segmented-control {
+    flex: 0 0 auto;
+  }
 }
 
 .file-chip {
@@ -1319,7 +1346,7 @@ kbd {
   .workspace-nav { justify-content: space-between; }
   .nav-cluster-left, .nav-cluster-right { flex: 1 1 auto; }
   .nav-cluster-right { justify-content: flex-end; }
-  .segmented-control { order: 3; }
+  .segmented-control { order: 3; margin: 0 auto; }
 }
 
 @media (max-width: 520px) {
