@@ -26,7 +26,7 @@ converted PDF as you drag.
 
 ## What is preserved
 
-Standard mode changes **only colour**. Everything else is byte-for-byte:
+The conversion changes **only colour**. Everything else is byte-for-byte:
 
 - selectable / searchable text and native font programs
 - link annotations and AcroForm fields
@@ -41,19 +41,22 @@ Every conversion is verified against the original with pdf.js (page count,
 per-page text, link annotations, form fields, image draws, bookmarks). It stays
 silent unless something other than colour moved, in which case it warns.
 
-## Two modes
+## How it converts
 
-| Type | What it does | Output size |
-|------|--------------|-------------|
-| **Standard PDF** (default) | Rewrites `rg/g/k` and `sc/scn` colour operators — device *and* named/ICCBased colour spaces — in page content, Form XObjects, tiling patterns and annotation appearance streams. Byte-splice edits; every non-colour byte kept. Re-saved with object streams. Lossless. | ~+8–18% of source |
-| **Scanned PDF** (lossy) | Re-renders each page to a contrast-boosted inverted image. **Text, links and vectors are not preserved** — pick this only for image-only scans, where there are no colour operators for Standard to work with. | varies |
+One pass, lossless. It rewrites `rg/g/k` and `sc/scn` colour operators — device
+*and* named/ICCBased colour spaces — in page content, Form XObjects, tiling
+patterns and annotation appearance streams. Byte-splice edits; every non-colour
+byte is kept, and the file is re-saved with object streams. Output runs
+**~+8–18%** of the source. The whole-document pass runs in a Web Worker so a
+large book never freezes the page.
 
 ## Themes
 
-Modern Slate (default), Midnight OLED, Warm Espresso — plus **Customize** for
-independent background / text / object colour, background lightness & warmth,
-text brightness / contrast / warmth, object saturation and border brightness.
-The preview is WYSIWYG: it renders the real converted PDF, live.
+Slate (default), Midnight, Espresso — plus **Customize** for independent
+background / text / object colour, background brightness & warmth, text
+brightness / contrast / warmth, object saturation and thickness. Each section
+has a revert control; **Reset All** returns everything to the theme. The preview
+is WYSIWYG: it renders the real converted PDF, live.
 
 ## Using it
 

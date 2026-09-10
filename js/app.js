@@ -22,8 +22,7 @@
     fileSize: 0,
     pageCount: 0,
     currentPage: 1,
-    zoomPct: 100,
-    activeEngine: 'stream_remap'
+    zoomPct: 100
   };
 
   const els = {};
@@ -31,14 +30,14 @@
     'uploadSection', 'dropZone', 'fileInput', 'btnUpload', 'btnDemo',
     'workspace', 'viewerContainer',
     'docTitle', 'docMeta', 'btnNewDoc', 'btnOpenDoc', 'btnDownload', 'sizeChip',
-    'themeSelect', 'btnToggleStudio', 'engineSelect',
-    'zoomSlider', 'zoomVal', 'btnZoomReset', 'btnZoomFill',
+    'themeSelect', 'btnToggleStudio',
+    'zoomSlider', 'zoomVal', 'btnZoomReset', 'btnZoomFill', 'btnZoomActual',
     'btnPrevPage', 'btnNextPage', 'pageInput', 'pageTotalDisplay',
     'colorStudioDrawer', 'btnCloseStudio', 'btnResetStudio',
     'studioBgColor', 'studioBgHex', 'sliderBgLightness', 'valBgLightness', 'sliderBgTint', 'valBgTint',
     'studioTextColor', 'studioTextHex', 'sliderTextBrightness', 'valTextBrightness',
     'sliderTextContrast', 'valTextContrast', 'sliderTextWarmth', 'valTextWarmth',
-    'studioObjColor', 'studioObjHex', 'studioObjMode', 'sliderObjSaturation', 'valObjSaturation',
+    'studioObjColor', 'studioObjHex', 'toggleObjRecolor', 'sliderObjSaturation', 'valObjSaturation',
     'sliderObjBorder', 'valObjBorder',
     'progressModal', 'progressBar', 'progressPercent', 'progressStatus', 'btnCancelProgress',
     'headerProgress', 'headerProgressFill'
@@ -174,13 +173,8 @@
 
     els.themeSelect.addEventListener('change', () => {
       converter.setTheme(els.themeSelect.value);
-      syncStudioWithTheme(converter.currentTheme);
+      syncStudioWithTheme();
       applyStudioColors();
-    });
-    els.engineSelect.addEventListener('change', () => {
-      state.activeEngine = els.engineSelect.value;
-      invalidateConversion();
-      scheduleRefresh();
     });
 
     document.querySelectorAll('.seg-btn').forEach((btn) => btn.addEventListener('click', () => {
@@ -193,6 +187,7 @@
     els.zoomSlider.addEventListener('change', () => setZoom(+els.zoomSlider.value, true));
     els.btnZoomReset.addEventListener('click', () => viewer.fitToView());
     els.btnZoomFill.addEventListener('click', () => viewer.fitToWidth());
+    els.btnZoomActual.addEventListener('click', () => setZoom(100, true));
 
     els.btnPrevPage.addEventListener('click', () => gotoPage(state.currentPage - 1));
     els.btnNextPage.addEventListener('click', () => gotoPage(state.currentPage + 1));
@@ -207,12 +202,18 @@
         if (/^#[0-9a-fA-F]{6}$/.test(els[hex].value)) { els[pick].value = els[hex].value; changed(); }
       });
     });
-    els.studioObjMode.addEventListener('change', changed);
+    els.toggleObjRecolor.addEventListener('change', changed);
     SLIDER_ROWS.forEach(([sl, out, fmt]) => els[sl].addEventListener('input', () => { els[out].textContent = fmt(+els[sl].value); changed(); }));
+
+    // Per-section revert — reset just this card's controls to the current theme
+    document.querySelectorAll('.param-card-revert').forEach((btn) => btn.addEventListener('click', () => {
+      applyGroupDefaults(btn.dataset.group);
+      applyStudioColors();
+    }));
 
     els.btnResetStudio.addEventListener('click', () => {
       converter.setTheme(els.themeSelect.value);
-      syncStudioWithTheme(converter.currentTheme);
+      syncStudioWithTheme();
       applyStudioColors();
     });
 
@@ -227,19 +228,32 @@
   }
 
   /* ---- customization <-> converter ---- */
-  function syncStudioWithTheme(theme) {
-    els.studioBgColor.value = els.studioBgHex.value = theme.bgHex;
-    els.studioTextColor.value = els.studioTextHex.value = theme.textHex;
-    els.studioObjColor.value = els.studioObjHex.value = theme.objHex;
-    els.sliderBgLightness.value = Math.round(rgbToHsl(theme.bg.r, theme.bg.g, theme.bg.b)[2] * 100);
-    els.sliderBgTint.value = 0;
-    els.sliderTextBrightness.value = 100;
-    els.sliderTextContrast.value = 100;
-    els.sliderTextWarmth.value = 0;
-    els.sliderObjSaturation.value = 100;
-    els.sliderObjBorder.value = 80;
-    els.studioObjMode.value = 'adapt';
+  // Reset one section's controls (or, via syncStudioWithTheme, all three) to the
+  // current theme's defaults.
+  function applyGroupDefaults(group) {
+    const theme = converter.currentTheme;
+    if (group === 'bg') {
+      els.studioBgColor.value = els.studioBgHex.value = theme.bgHex;
+      els.sliderBgLightness.value = Math.round(rgbToHsl(theme.bg.r, theme.bg.g, theme.bg.b)[2] * 100);
+      els.sliderBgTint.value = 0;
+    } else if (group === 'text') {
+      els.studioTextColor.value = els.studioTextHex.value = theme.textHex;
+      els.sliderTextBrightness.value = 100;
+      els.sliderTextContrast.value = 100;
+      els.sliderTextWarmth.value = 0;
+    } else if (group === 'obj') {
+      els.studioObjColor.value = els.studioObjHex.value = theme.objHex;
+      els.toggleObjRecolor.checked = false;
+      els.sliderObjSaturation.value = 100;
+      els.sliderObjBorder.value = 80;
+    }
     refreshSliderLabels();
+  }
+
+  function syncStudioWithTheme() {
+    applyGroupDefaults('bg');
+    applyGroupDefaults('text');
+    applyGroupDefaults('obj');
   }
 
   function applyStudioColors() {
@@ -250,7 +264,7 @@
       textContrast: +els.sliderTextContrast.value / 100,
       textWarmth: +els.sliderTextWarmth.value / 50,
       objHex: els.studioObjHex.value,
-      objMode: els.studioObjMode.value,
+      objMode: els.toggleObjRecolor.checked ? 'tint' : 'adapt',
       objSaturation: +els.sliderObjSaturation.value / 100,
       objBorderBrightness: +els.sliderObjBorder.value / 100
     });
@@ -298,7 +312,6 @@
   function collectSessionMeta() {
     return {
       name: state.fileName, size: state.fileSize,
-      engine: state.activeEngine,
       themeId: els.themeSelect.value,
       colors: { ...converter.customConfig },
       page: state.currentPage, zoom: state.zoomPct,
@@ -337,8 +350,7 @@
       state.fileSize = meta.size || buf.byteLength;
       state.originalBytes = new Uint8Array(buf);
       if (meta.themeId) { els.themeSelect.value = meta.themeId; converter.setTheme(meta.themeId); }
-      if (meta.colors) { converter.updateColorConfig(meta.colors); syncStudioWithTheme(converter.currentTheme); }
-      if (meta.engine) { state.activeEngine = meta.engine; els.engineSelect.value = meta.engine; }
+      if (meta.colors) { converter.updateColorConfig(meta.colors); syncStudioWithTheme(); }
       await setupWorkspace();                       // re-renders + re-converts
       if (meta.zoom) setZoom(meta.zoom, true);
       if (meta.page && meta.page > 1) gotoPage(meta.page);
@@ -484,7 +496,7 @@
         previewBytes = state.originalBytes;
         previewRange = String(targetPage);
       }
-      const res = await converter.convert(previewBytes, { engine: state.activeEngine, pageRange: previewRange });
+      const res = await converter.convert(previewBytes, { pageRange: previewRange });
       // Drop the result if a newer preview superseded it, or if the full
       // lossless pass has already finished — a late preview landing after
       // runFull() would flip the dark side back to a 1-page stand-in.
@@ -519,7 +531,7 @@
       // exactly why its rejection is ignored below -- that's this call's own
       // successor taking over, not a real failure.
       const res = await converter.convertInWorker(state.originalBytes, {
-        engine: state.activeEngine, pageRange: range,
+        pageRange: range,
         onProgress: (p) => { if (token === fullToken) setHeaderProgress(p.percent); }
       });
       if (token !== fullToken) return;
@@ -584,18 +596,16 @@
 
   /* ---- output-size estimate (calibrated in tests/size_calibration.js) ---- *
    * The PDF is re-saved with object streams, so original content carries       *
-   * through at ~its original density; Standard then adds a small dark-ground   *
-   * stream per page (~+10-18%). Scanned re-encodes every page as an image, so  *
-   * it can go either way. Single-stream-per-page PDFs sit at the low end.      */
-  function estimateOutputSize(origSize, pageCount, engine) {
+   * through at ~its original density; a small dark-ground stream is added per  *
+   * page (~+10-18%). Single-stream-per-page PDFs sit at the low end.           */
+  function estimateOutputSize(origSize, pageCount) {
     const p = Math.max(1, pageCount);
-    if (engine === 'scanned_canvas') return { lo: origSize * 0.30, hi: origSize * 2.0 };
-    return { lo: origSize * 0.95, hi: origSize * 1.35 + p * 45 + 500 };   // stream_remap (Standard)
+    return { lo: origSize * 0.95, hi: origSize * 1.35 + p * 45 + 500 };
   }
 
   // file chip shows  "<orig> → est ~<mid>"  before conversion, "<orig> → <actual>" after
   function showEstimatedSize() {
-    const e = estimateOutputSize(state.fileSize, state.pageCount, state.activeEngine);
+    const e = estimateOutputSize(state.fileSize, state.pageCount);
     els.sizeChip.textContent = `~${fmtSize((e.lo + e.hi) / 2)}`;
     els.sizeChip.title = `Estimated output ${fmtSize(e.lo)} – ${fmtSize(e.hi)} · updates to the real size after conversion`;
   }
@@ -819,13 +829,12 @@
       let bytes = state.convertedBytes;
       if (!state.conversionFresh || state.conversionRange !== range || !bytes) {
         showProgress('Converting...', 5);
-        // the modal's 'x' — only meaningful for the worker (Standard) path
-        if (state.activeEngine !== 'scanned_canvas') setProgressCancellable(() => converter.abortWorker());
+        setProgressCancellable(() => converter.abortWorker());   // the modal's 'x' aborts the worker
         // Off the main thread, same reasoning as runFull(): a full export on
         // a large document shouldn't freeze the modal's own progress updates
         // (or anything else) while pdf-lib's save() runs.
         const res = await converter.convertInWorker(state.originalBytes, {
-          engine: state.activeEngine, pageRange: range, onProgress: (p) => showProgress(p.message, p.percent)
+          pageRange: range, onProgress: (p) => showProgress(p.message, p.percent)
         });
         bytes = res.pdfBytes;
         state.convertedBytes = bytes;

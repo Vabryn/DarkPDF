@@ -83,8 +83,12 @@
 
       if (chroma < 0.11) {
         const dark = 1 - l;                                   // 1 for black, 0 for white
-        const boost = Math.pow(clamp(dark + 0.25, 0, 1), tc.contrast);
-        const k = Math.max(boost, clamp(0.62 + dark * 0.38, 0.62, 1));  // never invisible
+        // Visibility floor first (neutral text is never dimmer than this against
+        // the dark ground), then spread away from that floor by the Contrast
+        // control so the slider has real bite: >1 pushes neutral text brighter
+        // and crisper, <1 softens it toward the floor. At 1.0 it's a no-op.
+        const base = Math.max(clamp(dark + 0.25, 0, 1), clamp(0.62 + dark * 0.38, 0.62, 1));
+        const k = clamp(0.62 + (base - 0.62) * tc.contrast, 0, 1);
         let outR = tc.rgb.r * tc.brightness * k;
         let outG = tc.rgb.g * tc.brightness * k;
         let outB = tc.rgb.b * tc.brightness * k;

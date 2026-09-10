@@ -109,22 +109,15 @@
         <div class="select-wrapper">
           <span class="field-label">Theme</span>
           <select id="themeSelect" class="clean-select">
-            <option value="slate" selected>Modern Slate</option>
-            <option value="oled">Midnight OLED</option>
-            <option value="espresso">Warm Espresso</option>
+            <option value="slate" selected>Slate</option>
+            <option value="oled">Midnight</option>
+            <option value="espresso">Espresso</option>
           </select>
         </div>
         <button id="btnToggleStudio" class="btn btn-outline btn-compact" title="Open colour customization">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Customize</span>
         </button>
-        <div class="select-wrapper">
-          <span class="field-label">Type</span>
-          <select id="engineSelect" class="clean-select" title="Standard keeps text & vectors; Scanned re-inverts image-only PDFs">
-            <option value="stream_remap" selected>Standard PDF</option>
-            <option value="scanned_canvas">Scanned PDF</option>
-          </select>
-        </div>
       </div>
 
     </div>
@@ -136,6 +129,7 @@
       <span id="zoomVal" class="zoom-value">100%</span>
       <button id="btnZoomReset" class="btn-tag" title="Fit the whole page in view">Fit</button>
       <button id="btnZoomFill" class="btn-tag" title="Fill the pane width with the page">Fill</button>
+      <button id="btnZoomActual" class="btn-tag" title="Reset zoom to 100%">Reset</button>
     </div>
 
     <!-- Colour Customization Drawer -->
@@ -143,7 +137,6 @@
       <div class="drawer-header">
         <div class="drawer-heading">
           <span class="drawer-title">Customize</span>
-          <span class="drawer-sub">Lossless stream parameters</span>
         </div>
         <button id="btnCloseStudio" class="btn-icon-sub" title="Close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -151,28 +144,36 @@
       </div>
       <div class="drawer-body">
         <div class="param-card">
-          <div class="param-card-header"><span class="param-group-name">Background</span></div>
+          <div class="param-card-header">
+            <span class="param-group-name">Background</span>
+            <button type="button" class="param-card-revert" data-group="bg" title="Revert this section" aria-label="Revert Background">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></svg>
+            </button>
+          </div>
           <div class="param-field">
-            <span class="param-label">Base Tone</span>
             <div class="color-hex-group">
               <input type="color" id="studioBgColor" value="#18181b" class="swatch-picker">
               <input type="text" id="studioBgHex" class="param-hex" value="#18181b">
             </div>
           </div>
           <div class="param-field">
-            <div class="param-label-row"><span class="param-label">Lightness</span><span id="valBgLightness" class="param-numeric">9%</span></div>
+            <div class="param-label-row"><span class="param-label">Brightness</span><span id="valBgLightness" class="param-numeric">9%</span></div>
             <input type="range" id="sliderBgLightness" min="0" max="30" value="9" class="fine-slider">
           </div>
           <div class="param-field">
-            <div class="param-label-row"><span class="param-label">Colour Warmth</span><span id="valBgTint" class="param-numeric">Neutral</span></div>
+            <div class="param-label-row"><span class="param-label">Warmth</span><span id="valBgTint" class="param-numeric">Neutral</span></div>
             <input type="range" id="sliderBgTint" min="-50" max="50" value="0" class="fine-slider">
           </div>
         </div>
 
         <div class="param-card">
-          <div class="param-card-header"><span class="param-group-name">Typography &amp; Text</span></div>
+          <div class="param-card-header">
+            <span class="param-group-name">Text</span>
+            <button type="button" class="param-card-revert" data-group="text" title="Revert this section" aria-label="Revert Text">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></svg>
+            </button>
+          </div>
           <div class="param-field">
-            <span class="param-label">Font Glyph Tone</span>
             <div class="color-hex-group">
               <input type="color" id="studioTextColor" value="#f4f4f5" class="swatch-picker">
               <input type="text" id="studioTextHex" class="param-hex" value="#f4f4f5">
@@ -183,7 +184,7 @@
             <input type="range" id="sliderTextBrightness" min="60" max="100" value="100" class="fine-slider">
           </div>
           <div class="param-field">
-            <div class="param-label-row"><span class="param-label">Contrast Amplification</span><span id="valTextContrast" class="param-numeric">1.0x</span></div>
+            <div class="param-label-row"><span class="param-label">Contrast</span><span id="valTextContrast" class="param-numeric">1.0x</span></div>
             <input type="range" id="sliderTextContrast" min="80" max="160" value="100" class="fine-slider">
           </div>
           <div class="param-field">
@@ -193,32 +194,33 @@
         </div>
 
         <div class="param-card">
-          <div class="param-card-header"><span class="param-group-name">Vector Objects &amp; Tables</span></div>
+          <div class="param-card-header">
+            <span class="param-group-name">Vector Objects &amp; Tables</span>
+            <button type="button" class="param-card-revert" data-group="obj" title="Revert this section" aria-label="Revert Vector Objects">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></svg>
+            </button>
+          </div>
           <div class="param-field">
-            <span class="param-label">Accent Highlight</span>
+            <label class="param-check-row">
+              <input type="checkbox" id="toggleObjRecolor">
+              <span class="param-label">Modify Object Color</span>
+            </label>
             <div class="color-hex-group">
               <input type="color" id="studioObjColor" value="#38bdf8" class="swatch-picker">
               <input type="text" id="studioObjHex" class="param-hex" value="#38bdf8">
             </div>
           </div>
           <div class="param-field">
-            <span class="param-label">Vector Transform</span>
-            <select id="studioObjMode" class="clean-select" style="width: 100%;">
-              <option value="adapt" selected>Adapt Lightness (Keep Hues)</option>
-              <option value="tint">Unify Vectors to Accent</option>
-            </select>
-          </div>
-          <div class="param-field">
             <div class="param-label-row"><span class="param-label">Object Saturation</span><span id="valObjSaturation" class="param-numeric">100%</span></div>
             <input type="range" id="sliderObjSaturation" min="0" max="150" value="100" class="fine-slider">
           </div>
           <div class="param-field">
-            <div class="param-label-row"><span class="param-label">Table Lines &amp; Borders</span><span id="valObjBorder" class="param-numeric">80%</span></div>
+            <div class="param-label-row"><span class="param-label">Object Thickness</span><span id="valObjBorder" class="param-numeric">80%</span></div>
             <input type="range" id="sliderObjBorder" min="20" max="120" value="80" class="fine-slider">
           </div>
         </div>
 
-        <button id="btnResetStudio" class="btn btn-outline" style="width: 100%; font-size: 12px; margin-top: 4px;">Reset to theme defaults</button>
+        <button id="btnResetStudio" class="btn btn-outline" style="width: 100%; font-size: 12px; margin-top: 4px;">Reset All</button>
       </div>
     </aside>
 

@@ -17,12 +17,11 @@
 (function (window) {
   'use strict';
 
-  // Only the palette hexes are stored; bg/text/obj RGB and the per-channel
-  // inverse (used by the scanned re-inverter) are derived — see normalizeTheme.
+  // Only the palette hexes are stored; bg/text/obj RGB is derived — see normalizeTheme.
   const THEME_HEX = {
-    slate:   { name: 'Modern Slate',   bg: '#18181b', text: '#f4f4f5', obj: '#38bdf8' },
-    oled:    { name: 'Midnight OLED',  bg: '#000000', text: '#ffffff', obj: '#60a5fa' },
-    espresso:{ name: 'Warm Espresso',  bg: '#1c1815', text: '#f5ebd9', obj: '#fbbf24' }
+    slate:   { name: 'Slate',    bg: '#18181b', text: '#f4f4f5', obj: '#38bdf8' },
+    oled:    { name: 'Midnight', bg: '#000000', text: '#ffffff', obj: '#60a5fa' },
+    espresso:{ name: 'Espresso', bg: '#1c1815', text: '#f5ebd9', obj: '#fbbf24' }
   };
 
   const SKIP_STREAM_KEYS = new Set(['Filter', 'DecodeParms', 'DP', 'Length', 'F', 'FFilter', 'FDecodeParms']);
@@ -256,12 +255,7 @@
 
   function normalizeTheme(id, name, bgHex, textHex, objHex) {
     const bg = hexToRgb(bgHex), text = hexToRgb(textHex), obj = hexToRgb(objHex);
-    return {
-      id, name, bgHex, textHex, objHex, bg, text, obj,
-      invR: Math.min(1, Math.max(0, 1 - bg.r)),
-      invG: Math.min(1, Math.max(0, 1 - bg.g)),
-      invB: Math.min(1, Math.max(0, 1 - bg.b))
-    };
+    return { id, name, bgHex, textHex, objHex, bg, text, obj };
   }
 
   class PDFConverter {
@@ -309,16 +303,13 @@
 
     async convert(pdfBytes, options = {}) {
       const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      const engine = options.engine || this.currentEngine;
       const onProgress = options.onProgress || (() => {});
       onProgress({ stage: 'loading', percent: 5, message: 'Parsing PDF structure...' });
 
       // work on a private copy — pdf-lib / pdf.js may detach the input buffer
       const bytes = pdfBytes instanceof Uint8Array ? pdfBytes.slice(0) : new Uint8Array(pdfBytes);
 
-      let res;
-      if (engine === 'scanned_canvas') res = await this._convertScannedCanvas(bytes, onProgress, options);
-      else res = await this._convertStreamRemap(bytes, onProgress, options);   // 'stream_remap' (default)
+      const res = await this._convertStreamRemap(bytes, onProgress, options);
 
       onProgress({ stage: 'complete', percent: 100, message: 'Conversion complete.' });
       return {
@@ -330,11 +321,10 @@
     }
 
     /**
-     * Same result as convert(), but runs Standard-mode conversion in a Web
-     * Worker so a large document's PDFDocument.save() -- unyielding, can't
-     * be chunked -- never blocks the main thread. Scanned mode (needs
-     * canvas + pdf.js rendering) and environments without Worker support
-     * fall back to the normal in-page convert().
+     * Same result as convert(), but runs the conversion in a Web Worker so a
+     * large document's PDFDocument.save() -- unyielding, can't be chunked --
+     * never blocks the main thread. Environments without Worker support fall
+     * back to the normal in-page convert().
      *
      * Calling this again on the same instance CANCELS any still-running
      * worker job outright (worker.terminate(), not a cooperative flag) --
@@ -342,8 +332,7 @@
      * (and finishing a multi-second save()) for a result nobody will use.
      */
     convertInWorker(pdfBytes, options = {}) {
-      const engine = options.engine || this.currentEngine;
-      if (engine === 'scanned_canvas' || typeof Worker === 'undefined') {
+      if (typeof Worker === 'undefined') {
         return this.convert(pdfBytes, options);
       }
 
@@ -388,7 +377,7 @@
           settle(reject, new Error(err.message || 'Conversion worker failed.'));
         };
         worker.postMessage(
-          { pdfBytes: bytes, engine, pageRange: options.pageRange, customConfig: this.customConfig },
+          { pdfBytes: bytes, pageRange: options.pageRange, customConfig: this.customConfig },
           [bytes.buffer]
         );
       });
@@ -709,59 +698,6 @@
       onProgress({ stage: 'saving', percent: 95, message: 'Encoding output PDF...' });
       await this._yield();
       return { pdfBytes: await pdfDoc.save(), pageCount, stats: stat };
-    }
-
-    /* ============ SCANNED — page raster inverter (LOSSY) ================== */
-    async _convertScannedCanvas(pdfBytes, onProgress, options) {
-      if (!window.pdfjsLib) throw new Error('pdf.js is required for Scanned mode.');
-      const { PDFDocument } = this._getPDFLib();
-
-      const pdf = await window.pdfjsLib.getDocument({
-        data: pdfBytes instanceof Uint8Array ? pdfBytes.slice(0) : new Uint8Array(pdfBytes),
-        useSystemFonts: true, isEvalSupported: false
-      }).promise;
-      const pageCount = pdf.numPages;
-      const outputDoc = await PDFDocument.create();
-      const inRange = new Set(this._parsePageRange(options.pageRange, pageCount));
-      const theme = this.currentTheme;
-      const CONTRAST = 1.15;
-      const factor = (259 * (CONTRAST * 255 + 255)) / (255 * (259 - CONTRAST * 255));
-
-      for (let i = 1; i <= pageCount; i++) {
-        if (!inRange.has(i)) continue;
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2 });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const cctx = canvas.getContext('2d');
-        await page.render({ canvasContext: cctx, viewport }).promise;
-
-        const img = cctx.getImageData(0, 0, canvas.width, canvas.height);
-        const d = img.data;
-        for (let j = 0; j < d.length; j += 4) {
-          let r = factor * ((255 - d[j]) - 128) + 128;
-          let g = factor * ((255 - d[j + 1]) - 128) + 128;
-          let b = factor * ((255 - d[j + 2]) - 128) + 128;
-          if (theme.id !== 'oled') { r *= theme.invR; g *= theme.invG; b *= theme.invB; }
-          d[j] = Math.max(0, Math.min(255, r));
-          d[j + 1] = Math.max(0, Math.min(255, g));
-          d[j + 2] = Math.max(0, Math.min(255, b));
-        }
-        cctx.putImageData(img, 0, 0);
-
-        const w = page.view[2] - page.view[0], h = page.view[3] - page.view[1];
-        const embedded = await outputDoc.embedJpg(canvas.toDataURL('image/jpeg', 0.92));
-        outputDoc.addPage([w, h]).drawImage(embedded, { x: 0, y: 0, width: w, height: h });
-        canvas.width = canvas.height = 1;
-
-        onProgress({ stage: 'processing', percent: Math.round(15 + (i / pageCount) * 75), message: `Inverting scanned page ${i} of ${pageCount}...` });
-        await this._yield();
-      }
-
-      onProgress({ stage: 'saving', percent: 95, message: 'Encoding output PDF...' });
-      await this._yield();
-      return { pdfBytes: await outputDoc.save(), pageCount, stats: { engine: 'scanned_canvas', lossy: true } };
     }
 
     /* ---- helpers -------------------------------------------------------- */

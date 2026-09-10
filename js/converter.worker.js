@@ -12,19 +12,16 @@
  * termination is immediate and unconditional, so a stale conversion can't
  * keep burning CPU (or finish a multi-second save()) after the user has
  * already moved on to something else.
- *
- * Scanned mode is NOT run here -- it needs canvas + pdf.js page rendering,
- * which stays on the main thread.
  */
 importScripts('vendor/pdf-lib.min.js', 'stream-parser.js', 'converter.js');
 
 self.onmessage = async (e) => {
-  const { pdfBytes, engine, pageRange, customConfig } = e.data;
+  const { pdfBytes, pageRange, customConfig } = e.data;
   try {
     const converter = new self.PDFConverter();
     if (customConfig) converter.updateColorConfig(customConfig);
     const res = await converter.convert(pdfBytes, {
-      engine, pageRange,
+      pageRange,
       onProgress: (p) => self.postMessage({ type: 'progress', percent: p.percent, message: p.message })
     });
     self.postMessage(
