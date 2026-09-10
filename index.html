@@ -28,38 +28,53 @@
       <span class="brand-name">DarkPDF</span>
     </div>
 
-    <!-- Conversion progress: miniature page-wipe widget center-aligned in header -->
+    <!-- Conversion progress: clean transfer animation center-aligned in header -->
     <div id="renderWidget" class="rw-panel" data-state="idle" hidden
          role="progressbar" aria-label="Converting document to dark mode"
          aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-      <div class="rw-frame">
-        <div class="rw-stage">
-          <div class="rw-clip">
-            <!-- destination: the converted dark page -->
-            <div class="rw-sheet rw-dark">
-              <div class="rw-head"><div class="rw-logo"></div><div class="rw-date"></div></div>
-              <div class="rw-content">
-                <div class="rw-row"><div class="rw-card"></div><div class="rw-card"></div></div>
-                <div class="rw-chart">
-                  <div class="rw-bar rw-h40"></div><div class="rw-bar rw-h80"></div><div class="rw-bar rw-h60"></div><div class="rw-bar rw-h95"></div>
-                </div>
-                <div class="rw-text"><div class="rw-line rw-w40"></div><div class="rw-line rw-w20"></div></div>
-                <div class="rw-text"><div class="rw-line rw-w40"></div><div class="rw-line rw-w20"></div></div>
-              </div>
-            </div>
-            <!-- source: the original light page, clipped away as work completes -->
-            <div id="renderWidgetLight" class="rw-sheet rw-light">
-              <div class="rw-head"><div class="rw-logo"></div><div class="rw-date"></div></div>
-              <div class="rw-content">
-                <div class="rw-row"><div class="rw-card"></div><div class="rw-card"></div></div>
-                <div class="rw-chart">
-                  <div class="rw-bar rw-h40"></div><div class="rw-bar rw-h80"></div><div class="rw-bar rw-h60"></div><div class="rw-bar rw-h95"></div>
-                </div>
-                <div class="rw-text"><div class="rw-line rw-w40"></div><div class="rw-line rw-w20"></div></div>
-                <div class="rw-text"><div class="rw-line rw-w40"></div><div class="rw-line rw-w20"></div></div>
-              </div>
+      <div class="rw-stage">
+        <!-- 1. SOURCE: Draining Light Mode -->
+        <div class="icon-frame">
+          <svg class="skeleton" viewBox="0 0 48 64">
+            <rect x="1" y="1" width="46" height="62" rx="6" />
+            <path d="M12 20h24 M12 32h24 M12 44h12" />
+          </svg>
+          <div id="renderWidgetDrain" class="mask drain-anim">
+            <div class="content light-mode">
+              <svg viewBox="0 0 48 64">
+                <rect x="0" y="0" width="48" height="64" fill="#E6E6E6" rx="6" />
+                <g stroke="#999" stroke-width="2" stroke-linecap="round">
+                  <path d="M12 20h24 M12 32h24 M12 44h12" />
+                </g>
+              </svg>
             </div>
           </div>
+        </div>
+
+        <!-- 2. BRIDGE: Clean Pulse -->
+        <div class="bridge">
+          <div class="track"></div>
+          <div id="renderWidgetPulse" class="pulse"></div>
+        </div>
+
+        <!-- 3. DESTINATION: Filling Dark Mode -->
+        <div class="icon-frame dest-frame">
+          <svg class="skeleton" viewBox="0 0 48 64">
+            <rect x="1" y="1" width="46" height="62" rx="6" />
+            <path d="M12 20h24 M12 32h24 M12 44h12" />
+          </svg>
+          <div id="renderWidgetFill" class="mask fill-anim">
+            <div class="content dark-mode">
+              <svg viewBox="0 0 48 64">
+                <rect x="0" y="0" width="48" height="64" fill="#111" rx="6" />
+                <g stroke="#FFF" stroke-width="2" stroke-linecap="round">
+                  <path d="M12 20h24 M12 32h24 M12 44h12" />
+                </g>
+              </svg>
+            </div>
+            <div class="highlight-line"></div>
+          </div>
+          <div class="glow"></div>
         </div>
       </div>
       <div class="rw-caption"><span class="rw-label">Converting</span> <span id="renderWidgetPct" class="rw-pct">0%</span></div>

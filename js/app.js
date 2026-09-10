@@ -41,7 +41,7 @@
     'studioObjColor', 'studioObjHex', 'toggleObjRecolor', 'sliderObjSaturation', 'valObjSaturation',
     'sliderObjBorder', 'valObjBorder',
     'progressModal', 'progressBar', 'progressPercent', 'progressStatus', 'btnCancelProgress',
-    'renderWidget', 'renderWidgetLight', 'renderWidgetPct'
+    'renderWidget', 'renderWidgetDrain', 'renderWidgetFill', 'renderWidgetPulse', 'renderWidgetLight', 'renderWidgetPct'
   ].forEach((id) => { els[id] = document.getElementById(id); });
 
   let converter, viewer;
@@ -578,45 +578,71 @@
   }
 
   /* ---- conversion progress widget -----------------------------------------
-     A miniature page whose light sheet is clipped away left-to-right; the wipe
-     position IS the percentage, so it tracks the real conversion rather than
-     running a fixed-length animation. Driven only from runFull(), so it appears
-     when the background pass starts and clears when that pass lands. */
+     Clean Transfer animation: source light document drains while destination
+     dark document fills in direct proportion to conversion progress. Pulse shoots
+     across bridge. Completes a single loop (bump + flash) only when percentage
+     finishes at 100%. */
   let rwFadeTimers = [];
   function clearRenderTimers() { rwFadeTimers.forEach(clearTimeout); rwFadeTimers = []; }
 
   function showRenderProgress() {
     clearRenderTimers();
+    if (!els.renderWidget) return;
     els.renderWidget.hidden = false;
-    // A restart snaps the light sheet back instantly — animating the wipe
-    // backwards would read as the conversion undoing itself.
-    els.renderWidgetLight.style.transition = 'none';
-    els.renderWidgetLight.style.clipPath = 'inset(0 0 0 0)';
-    void els.renderWidgetLight.offsetWidth;                    // flush the snap
-    els.renderWidgetLight.style.transition = '';
+    // Snap positions back to 0% instantly before starting
+    if (els.renderWidgetDrain) {
+      els.renderWidgetDrain.style.transition = 'none';
+      els.renderWidgetDrain.style.height = '100%';
+    }
+    if (els.renderWidgetFill) {
+      els.renderWidgetFill.style.transition = 'none';
+      els.renderWidgetFill.style.height = '0%';
+    }
+    if (els.renderWidgetPulse) {
+      els.renderWidgetPulse.style.transition = 'none';
+      els.renderWidgetPulse.style.left = '0%';
+      els.renderWidgetPulse.style.opacity = '0';
+    }
+    void els.renderWidget.offsetWidth; // flush the snap
+    if (els.renderWidgetDrain) els.renderWidgetDrain.style.transition = '';
+    if (els.renderWidgetFill) els.renderWidgetFill.style.transition = '';
+    if (els.renderWidgetPulse) els.renderWidgetPulse.style.transition = '';
     els.renderWidget.dataset.state = 'running';
     setRenderProgress(0);
   }
 
   function setRenderProgress(pct) {
+    if (!els.renderWidget) return;
     const p = Math.max(0, Math.min(100, Number(pct) || 0));
-    els.renderWidgetLight.style.clipPath = `inset(0 0 0 ${p}%)`;
+    const drainH = 100 - p;
+    const fillH = p;
+    if (els.renderWidgetDrain) els.renderWidgetDrain.style.height = `${drainH}%`;
+    if (els.renderWidgetFill) els.renderWidgetFill.style.height = `${fillH}%`;
+    if (els.renderWidgetPulse) {
+      // Bridge track is 22px, pulse is 8px; travel range is 14px (22px - 8px)
+      els.renderWidgetPulse.style.left = `calc(${p}% * 14px / 100)`;
+      els.renderWidgetPulse.style.opacity = (p > 2 && p < 98) ? '1' : (p > 0 ? '0.6' : '0');
+    }
+    els.renderWidget.style.setProperty('--progress', `${p}%`);
     els.renderWidget.setAttribute('aria-valuenow', Math.round(p));
-    els.renderWidgetPct.textContent = `${Math.round(p)}%`;
+    if (els.renderWidgetPct) els.renderWidgetPct.textContent = `${Math.round(p)}%`;
   }
 
-  // Finish the wipe, hold the fully-dark page for a beat so the result reads,
-  // then fade the whole widget out.
+  // Finish the transfer, trigger the completion bloom & glow at 100%,
+  // hold for a beat, then fade the whole widget out.
   function finishRenderProgress() {
     clearRenderTimers();
+    if (!els.renderWidget) return;
     setRenderProgress(100);
+    if (els.renderWidgetPulse) els.renderWidgetPulse.style.opacity = '0';
     els.renderWidget.dataset.state = 'complete';
-    rwFadeTimers.push(setTimeout(() => { els.renderWidget.dataset.state = 'fading'; }, 700));
-    rwFadeTimers.push(setTimeout(hideRenderProgress, 1200));
+    rwFadeTimers.push(setTimeout(() => { els.renderWidget.dataset.state = 'fading'; }, 800));
+    rwFadeTimers.push(setTimeout(hideRenderProgress, 1300));
   }
 
   function hideRenderProgress() {
     clearRenderTimers();
+    if (!els.renderWidget) return;
     els.renderWidget.hidden = true;
     els.renderWidget.dataset.state = 'idle';
   }
