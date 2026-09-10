@@ -258,6 +258,71 @@
     return { id, name, bgHex, textHex, objHex, bg, text, obj };
   }
 
+  function isCoverPageNode(node, pageRes, resolve, PL) {
+    try {
+      const { PDFName, PDFArray, PDFDict, PDFRawStream, decodePDFRawStream } = PL;
+      const b = resolve(node.get(PDFName.of('CropBox')) || node.get(PDFName.of('MediaBox')));
+      if (!(b instanceof PDFArray) || b.size() < 4) return false;
+      const pageArea = Math.abs(
+        (Number(b.get(2).toString()) - Number(b.get(0).toString())) *
+        (Number(b.get(3).toString()) - Number(b.get(1).toString()))
+      );
+      if (!(pageArea > 0)) return false;
+
+      const xo = resolve(pageRes && pageRes.get && pageRes.get(PDFName.of('XObject')));
+      if (!(xo instanceof PDFDict)) return false;
+      const imgNames = new Set();
+      for (const k of xo.keys()) {
+        const o = resolve(xo.get(k));
+        if (o instanceof PDFRawStream &&
+            (o.dict.get(PDFName.of('Subtype')) || {}).toString?.() === '/Image') {
+          imgNames.add(k.toString().replace(/^\//, ''));
+        }
+      }
+      if (!imgNames.size) return false;
+
+      const cs = resolve(node.get(PDFName.of('Contents')));
+      const parts = cs instanceof PDFArray
+        ? Array.from({ length: cs.size() }, (_, i) => resolve(cs.get(i)))
+        : [cs];
+      let text = '';
+      for (const s of parts) {
+        if (!(s instanceof PDFRawStream)) continue;
+        text += new TextDecoder('latin1').decode(decodePDFRawStream(s).decode()) + '\n';
+      }
+      if (!text) return false;
+
+      const toks = text.match(/\/[^\s<>\[\]\/(){}%]+|-?\d*\.?\d+|[A-Za-z*'"]+/g) || [];
+      let ctm = [1, 0, 0, 1, 0, 0];
+      const stack = [];
+      let nums = [];
+      let lastName = null;
+      let inText = 0;
+      for (const t of toks) {
+        if (t === 'BT') { inText++; nums = []; continue; }
+        if (t === 'ET') { inText = Math.max(0, inText - 1); nums = []; continue; }
+        if (inText) { nums = []; continue; }
+        if (t[0] === '/') { lastName = t.slice(1); nums = []; continue; }
+        if (/^-?\d*\.?\d+$/.test(t)) { nums.push(parseFloat(t)); continue; }
+        if (t === 'q') { stack.push(ctm.slice()); nums = []; continue; }
+        if (t === 'Q') { if (stack.length) ctm = stack.pop(); nums = []; continue; }
+        if (t === 'cm' && nums.length >= 6) {
+          const [a, b2, c, d, e, f] = nums.slice(-6);
+          const [A, B, C, D, E, F] = ctm;
+          ctm = [a * A + b2 * C, a * B + b2 * D, c * A + d * C, c * B + d * D, e * A + f * C + E, e * B + f * D + F];
+          nums = [];
+          continue;
+        }
+        if (t === 'Do' && lastName && imgNames.has(lastName)) {
+          const imgArea = Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]);   // unit square -> device
+          if (imgArea >= 0.85 * pageArea) return true;
+        }
+        nums = [];
+      }
+      return false;
+    } catch (e) { return false; }
+  }
+
   class PDFConverter {
     constructor() {
       this.currentEngine = 'stream_remap';
@@ -318,6 +383,42 @@
         stats: res.stats || {},
         durationMs: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0)
       };
+    }
+
+    /**
+     * Fast (<1ms) check whether a specific page in a PDFDocument is a wall-to-wall
+     * raster image (e.g. cover page, full-bleed scan).
+     */
+    isPageCover(pdfDoc, pageIndex) {
+      try {
+        if (!pdfDoc) return false;
+        const pages = pdfDoc.getPages ? pdfDoc.getPages() : [];
+        if (pageIndex < 0 || pageIndex >= pages.length) return false;
+        const page = pages[pageIndex];
+        const PL = this._getPDFLib();
+        const { PDFName, PDFRef } = PL;
+        const resolve = (obj) => {
+          let cur = obj;
+          while (cur && (cur instanceof PDFRef || cur.constructor?.name === 'PDFRef')) {
+            cur = pdfDoc.context.lookup(cur);
+          }
+          return cur;
+        };
+        const inheritedResources = (n) => {
+          let cur = n;
+          while (cur) {
+            const r = cur.get && cur.get(PDFName.of('Resources'));
+            if (r) return resolve(r);
+            cur = resolve(cur.get && cur.get(PDFName.of('Parent')));
+          }
+          return undefined;
+        };
+        const node = page.node;
+        const pageRes = node.Resources() || inheritedResources(node);
+        return isCoverPageNode(node, pageRes, resolve, PL);
+      } catch (e) {
+        return false;
+      }
     }
 
     /**
@@ -462,72 +563,10 @@
 
       // A page that is essentially one wall-to-wall raster image — a cover, a
       // full-bleed figure, a scanned page — is left exactly as the publisher
-      // made it: no colour remap, no dark ground. Detect it by walking the
-      // graphics state (q / Q / cm) and checking whether an Image XObject is
-      // scaled to cover ~the whole page.
-      const isCoverPage = (node, pageRes) => {
-        try {
-          const b = resolve(node.get(PDFName.of('CropBox')) || node.get(PDFName.of('MediaBox')));
-          if (!(b instanceof PDFArray) || b.size() < 4) return false;
-          const pageArea = Math.abs(
-            (Number(b.get(2).toString()) - Number(b.get(0).toString())) *
-            (Number(b.get(3).toString()) - Number(b.get(1).toString()))
-          );
-          if (!(pageArea > 0)) return false;
-
-          const xo = resolve(pageRes && pageRes.get && pageRes.get(PDFName.of('XObject')));
-          if (!(xo instanceof PDFDict)) return false;
-          const imgNames = new Set();
-          for (const k of xo.keys()) {
-            const o = resolve(xo.get(k));
-            if (o instanceof PDFRawStream &&
-                (o.dict.get(PDFName.of('Subtype')) || {}).toString?.() === '/Image') {
-              imgNames.add(k.toString().replace(/^\//, ''));
-            }
-          }
-          if (!imgNames.size) return false;
-
-          const cs = resolve(node.get(PDFName.of('Contents')));
-          const parts = cs instanceof PDFArray
-            ? Array.from({ length: cs.size() }, (_, i) => resolve(cs.get(i)))
-            : [cs];
-          let text = '';
-          for (const s of parts) {
-            if (!(s instanceof PDFRawStream)) continue;
-            text += new TextDecoder('latin1').decode(decodePDFRawStream(s).decode()) + '\n';
-          }
-          if (!text) return false;
-
-          const toks = text.match(/\/[^\s<>\[\]\/(){}%]+|-?\d*\.?\d+|[A-Za-z*'"]+/g) || [];
-          let ctm = [1, 0, 0, 1, 0, 0];
-          const stack = [];
-          let nums = [];
-          let lastName = null;
-          let inText = 0;
-          for (const t of toks) {
-            if (t === 'BT') { inText++; nums = []; continue; }
-            if (t === 'ET') { inText = Math.max(0, inText - 1); nums = []; continue; }
-            if (inText) { nums = []; continue; }
-            if (t[0] === '/') { lastName = t.slice(1); nums = []; continue; }
-            if (/^-?\d*\.?\d+$/.test(t)) { nums.push(parseFloat(t)); continue; }
-            if (t === 'q') { stack.push(ctm.slice()); nums = []; continue; }
-            if (t === 'Q') { if (stack.length) ctm = stack.pop(); nums = []; continue; }
-            if (t === 'cm' && nums.length >= 6) {
-              const [a, b2, c, d, e, f] = nums.slice(-6);
-              const [A, B, C, D, E, F] = ctm;
-              ctm = [a * A + b2 * C, a * B + b2 * D, c * A + d * C, c * B + d * D, e * A + f * C + E, e * B + f * D + F];
-              nums = [];
-              continue;
-            }
-            if (t === 'Do' && lastName && imgNames.has(lastName)) {
-              const imgArea = Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]);   // unit square -> device
-              if (imgArea >= 0.85 * pageArea) return true;
-            }
-            nums = [];
-          }
-          return false;
-        } catch (e) { return false; }
-      };
+      // made it: no colour remap, no dark ground.
+      const isCoverPage = (node, pageRes) => isCoverPageNode(node, pageRes, resolve, {
+        PDFName, PDFArray, PDFDict, PDFRawStream, decodePDFRawStream
+      });
 
       const coverPages = new Set();
 
@@ -694,6 +733,7 @@
       }
 
       stat.pagesLeftAsImage = coverPages.size;
+      stat.coverPages = Array.from(coverPages);
 
       onProgress({ stage: 'saving', percent: 95, message: 'Encoding output PDF...' });
       await this._yield();

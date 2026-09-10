@@ -22,7 +22,8 @@
     fileSize: 0,
     pageCount: 0,
     currentPage: 1,
-    zoomPct: 100
+    zoomPct: 100,
+    coverPages: new Set()
   };
 
   const els = {};
@@ -396,6 +397,15 @@
     els.btnNextPage.disabled = page >= state.pageCount;
     viewer.goToPage(page);
     schedulePersistMeta();
+
+    const pageIdx = page - 1;
+    let isCover = state.coverPages.has(pageIdx);
+    if (!isCover && state.srcDoc && converter.isPageCover) {
+      isCover = converter.isPageCover(state.srcDoc, pageIdx);
+      if (isCover) state.coverPages.add(pageIdx);
+    }
+    viewer.setPageIsImage(isCover);
+
     // A page jump converts immediately, not on the slider-drag debounce —
     // it's proportional to that one page alone, so on a 1000-page book this
     // is just as fast as on a 10-page one, and there's no reason to delay it.
@@ -497,6 +507,15 @@
         previewRange = String(targetPage);
       }
       const res = await converter.convert(previewBytes, { pageRange: previewRange });
+      const isCover = !!(res && res.stats && (res.stats.pagesLeftAsImage > 0 || (res.stats.coverPages && res.stats.coverPages.length > 0)));
+      if (isCover) {
+        state.coverPages.add(targetPage - 1);
+      } else if (!state.srcDoc) {
+        state.coverPages.delete(targetPage - 1);
+      }
+      if (state.currentPage === targetPage) {
+        viewer.setPageIsImage(isCover);
+      }
       // Drop the result if a newer preview superseded it, or if the full
       // lossless pass has already finished — a late preview landing after
       // runFull() would flip the dark side back to a 1-page stand-in.
@@ -535,6 +554,11 @@
         onProgress: (p) => { if (token === fullToken) setRenderProgress(p.percent); }
       });
       if (token !== fullToken) return;
+
+      if (res.stats && Array.isArray(res.stats.coverPages)) {
+        state.coverPages = new Set(res.stats.coverPages);
+        viewer.setPageIsImage(state.coverPages.has(state.currentPage - 1));
+      }
 
       state.convertedBytes = res.pdfBytes;
       state.conversionFresh = true;
@@ -701,6 +725,11 @@
     // viewer.loadDocument() fits page width automatically; slider syncs via onZoomChange
     showEstimatedSize();
 
+    state.coverPages = new Set();
+    const isCover = state.srcDoc && converter.isPageCover ? converter.isPageCover(state.srcDoc, 0) : false;
+    if (isCover) state.coverPages.add(0);
+    viewer.setPageIsImage(isCover);
+
     invalidateConversion();
     runPreview();
     scheduleFull();
@@ -712,6 +741,8 @@
   async function loadDemoPdf() {
     try {
       showProgress('Building sample PDF...');
+      state.coverPages = new Set();
+      viewer.setPageIsImage(false);
       const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
       const doc = await PDFDocument.create();
       const F = await doc.embedFont(StandardFonts.Helvetica);

@@ -63,6 +63,10 @@
               </div>
             </div>
             <div class="view-badge light-badge" id="lightBadge">Original Light</div>
+            <div class="view-badge image-disclaimer-badge" id="imageDisclaimerBadge" hidden title="Full-page image detected: preserved as original without dark conversion">
+              <svg class="badge-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>Full-Page Image (Preserved)</span>
+            </div>
             <div class="view-badge dark-badge" id="darkBadge">Lossless Dark</div>
           </div>
         </div>`;
@@ -78,6 +82,8 @@
       this.splitSlider = q('splitSlider');
       this.lightBadge = q('lightBadge');
       this.darkBadge = q('darkBadge');
+      this.imageDisclaimerBadge = q('imageDisclaimerBadge');
+      this._isCoverPage = false;
     }
 
     _bindEvents() {
@@ -213,13 +219,25 @@
       this.splitSlider.setAttribute('aria-valuenow', Math.round(percent));
     }
 
+    _updateBadges() {
+      const showBadges = this.viewMode === 'split';
+      this.lightBadge.hidden = !showBadges;
+      this.darkBadge.hidden = !showBadges;
+      if (this.imageDisclaimerBadge) {
+        this.imageDisclaimerBadge.hidden = !showBadges || !this._isCoverPage;
+      }
+      this.splitSlider.hidden = !showBadges;
+    }
+
+    setPageIsImage(isImage) {
+      this._isCoverPage = !!isImage;
+      this._updateBadges();
+    }
+
     setViewMode(mode) {
       this.viewMode = mode;
       this.stage.className = `viewer-stage mode-${mode}`;
-      const showBadges = mode === 'split';
-      this.lightBadge.hidden = !showBadges;
-      this.darkBadge.hidden = !showBadges;
-      this.splitSlider.hidden = mode !== 'split';
+      this._updateBadges();
 
       if (mode === 'split') {
         this.lightContainer.style.display = 'block';
@@ -388,6 +406,7 @@
       this._clearPreview();                        // this frame is painted at the real scale
       this.stage.style.width = `${w}px`;
       this.stage.style.height = `${h}px`;
+      this.stage.classList.toggle('narrow-stage', w < 450);
 
       // Safe DPR & canvas limits to prevent iOS Safari Jetsam OOM crashes
       const dpr = window.devicePixelRatio || 1;
@@ -454,6 +473,7 @@
       await this._renderTextLayer(page, vp, token);
 
       this.darkBadge.textContent = this.darkIsPreview ? 'Dark (live preview)' : 'Lossless Dark';
+      this._updateBadges();
       if (this.viewMode === 'split') this.setSliderPosition(this.sliderPosition);
     }
 

@@ -33,6 +33,10 @@ const { pageContentStrings } = require('./lib.js');
   const res = await conv.convert(src, { engine: 'stream_remap' });
 
   eq(res.stats.pagesLeftAsImage, 1, 'exactly one page detected as full-page image');
+  ok(Array.isArray(res.stats.coverPages) && res.stats.coverPages.includes(0), 'coverPages contains index 0');
+  const loaded = await PDFDocument.load(src);
+  ok(conv.isPageCover(loaded, 0), 'isPageCover returns true for cover page (index 0)');
+  ok(!conv.isPageCover(loaded, 1), 'isPageCover returns false for body page (index 1)');
   eq(res.stats.streamsFailed, 0, 'no stream failures');
 
   const before = await pageContentStrings(src);

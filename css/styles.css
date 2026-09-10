@@ -1098,11 +1098,55 @@ kbd {
   color: #000000;
 }
 
+.image-disclaimer-badge {
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  /* In-between tone between Original Light (rgba(255,255,255,0.9)) and Lossless Dark (rgba(10,10,12,0.9)) */
+  background: rgba(80, 84, 96, 0.92);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  z-index: 42;
+  transition: top 0.15s ease, font-size 0.15s ease, padding 0.15s ease;
+}
+
+.image-disclaimer-badge .badge-icon {
+  flex-shrink: 0;
+  display: block;
+}
+
 .dark-badge {
   right: 10px;
   background: rgba(10, 10, 12, 0.9);
   color: #ffffff;
   border: 1px solid var(--border-hairline);
+}
+
+/* Mobile & narrow-stage responsiveness:
+   On phones or narrow stage zooms, drop the disclaimer to row 2 (top: 36px)
+   so it never collides with Original Light or Lossless Dark */
+@media (max-width: 560px) {
+  .view-badge {
+    font-size: 9px;
+    padding: 2.5px 6px;
+  }
+  .image-disclaimer-badge {
+    top: 36px;
+    padding: 2.5px 7px;
+  }
+}
+
+.viewer-stage.narrow-stage .image-disclaimer-badge {
+  top: 36px;
+  font-size: 9px;
+  padding: 2.5px 7px;
 }
 
 /* Text Layer */
