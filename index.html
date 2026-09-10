@@ -27,11 +27,6 @@
       </div>
       <span class="brand-name">DarkPDF</span>
     </div>
-    <div id="headerProgress" class="header-progress" hidden>
-      <div class="header-progress-track">
-        <div id="headerProgressFill" class="header-progress-fill"></div>
-      </div>
-    </div>
     <div class="header-status"><span class="status-label">Secure. Private.</span></div>
   </header>
 
@@ -236,6 +231,45 @@
         <input type="number" id="pageInput" class="pager-input" min="1" value="1" aria-label="Current page">
         <span id="pageTotalDisplay" class="pager-total">/ 1</span>
       </div>
+    </div>
+
+    <!-- Conversion progress: a miniature page whose light sheet is wiped away
+         left-to-right, revealing the dark one underneath. The wipe position IS
+         the percentage — see setRenderProgress() in js/app.js. -->
+    <div id="renderWidget" class="rw-panel" data-state="idle" hidden
+         role="progressbar" aria-label="Converting document to dark mode"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="rw-frame">
+        <div class="rw-stage">
+          <div class="rw-clip">
+            <!-- destination: the converted dark page -->
+            <div class="rw-sheet rw-dark">
+              <div class="rw-head"><div class="rw-logo"></div><div class="rw-date"></div></div>
+              <div class="rw-content">
+                <div class="rw-row"><div class="rw-card"></div><div class="rw-card"></div></div>
+                <div class="rw-chart">
+                  <div class="rw-bar rw-h40"></div><div class="rw-bar rw-h80"></div><div class="rw-bar rw-h60"></div><div class="rw-bar rw-h95"></div>
+                </div>
+                <div class="rw-text"><div class="rw-line rw-w40"></div><div class="rw-line rw-w20"></div></div>
+                <div class="rw-text"><div class="rw-line rw-w40"></div><div class="rw-line rw-w20"></div></div>
+              </div>
+            </div>
+            <!-- source: the original light page, clipped away as work completes -->
+            <div id="renderWidgetLight" class="rw-sheet rw-light">
+              <div class="rw-head"><div class="rw-logo"></div><div class="rw-date"></div></div>
+              <div class="rw-content">
+                <div class="rw-row"><div class="rw-card"></div><div class="rw-card"></div></div>
+                <div class="rw-chart">
+                  <div class="rw-bar rw-h40"></div><div class="rw-bar rw-h80"></div><div class="rw-bar rw-h60"></div><div class="rw-bar rw-h95"></div>
+                </div>
+                <div class="rw-text"><div class="rw-line rw-w40"></div><div class="rw-line rw-w20"></div></div>
+                <div class="rw-text"><div class="rw-line rw-w40"></div><div class="rw-line rw-w20"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rw-caption">Converting <span id="renderWidgetPct" class="rw-pct">0%</span></div>
     </div>
   </main>
 

@@ -40,7 +40,7 @@
     'studioObjColor', 'studioObjHex', 'toggleObjRecolor', 'sliderObjSaturation', 'valObjSaturation',
     'sliderObjBorder', 'valObjBorder',
     'progressModal', 'progressBar', 'progressPercent', 'progressStatus', 'btnCancelProgress',
-    'headerProgress', 'headerProgressFill'
+    'renderWidget', 'renderWidgetLight', 'renderWidgetPct'
   ].forEach((id) => { els[id] = document.getElementById(id); });
 
   let converter, viewer;
@@ -521,7 +521,7 @@
     if (!state.originalBytes) return;
     const token = ++fullToken;
     const range = explicitRange || 'All';   // export always covers the whole document
-    showHeaderProgress();
+    showRenderProgress();
     try {
       // Off the main thread: a large document's final PDFDocument.save() is a
       // single call pdf-lib can't yield inside, so running it in-page would
@@ -532,7 +532,7 @@
       // successor taking over, not a real failure.
       const res = await converter.convertInWorker(state.originalBytes, {
         pageRange: range,
-        onProgress: (p) => { if (token === fullToken) setHeaderProgress(p.percent); }
+        onProgress: (p) => { if (token === fullToken) setRenderProgress(p.percent); }
       });
       if (token !== fullToken) return;
 
@@ -544,35 +544,58 @@
       try { await viewer.setDarkDocument(res.pdfBytes, false); } catch (e) { console.warn('dark render', e); }
       if (token !== fullToken) return;
       await runRetention(res, token);
-      finishHeaderProgress();
+      finishRenderProgress();
     } catch (e) {
       if (e && e.superseded) return;   // a newer runFull() already took over
-      hideHeaderProgress();
+      hideRenderProgress();
       console.error(e);
       toast('Conversion failed: ' + (e && e.message ? e.message : e), 'error');
     }
   }
 
-  function showHeaderProgress() {
-    els.headerProgress.hidden = false;
-    els.headerProgress.classList.remove('is-complete', 'is-fading');
-    setHeaderProgress(2);
+  /* ---- conversion progress widget -----------------------------------------
+     A miniature page whose light sheet is clipped away left-to-right; the wipe
+     position IS the percentage, so it tracks the real conversion rather than
+     running a fixed-length animation. Driven only from runFull(), so it appears
+     when the background pass starts and clears when that pass lands. */
+  let rwFadeTimers = [];
+  function clearRenderTimers() { rwFadeTimers.forEach(clearTimeout); rwFadeTimers = []; }
+
+  function showRenderProgress() {
+    clearRenderTimers();
+    els.renderWidget.hidden = false;
+    // A restart snaps the light sheet back instantly — animating the wipe
+    // backwards would read as the conversion undoing itself.
+    els.renderWidgetLight.style.transition = 'none';
+    els.renderWidgetLight.style.clipPath = 'inset(0 0 0 0)';
+    void els.renderWidgetLight.offsetWidth;                    // flush the snap
+    els.renderWidgetLight.style.transition = '';
+    els.renderWidget.dataset.state = 'running';
+    setRenderProgress(0);
   }
-  function setHeaderProgress(pct) {
-    els.headerProgressFill.style.width = Math.max(2, Math.min(100, pct)) + '%';
+
+  function setRenderProgress(pct) {
+    const p = Math.max(0, Math.min(100, Number(pct) || 0));
+    els.renderWidgetLight.style.clipPath = `inset(0 0 0 ${p}%)`;
+    els.renderWidget.setAttribute('aria-valuenow', Math.round(p));
+    els.renderWidgetPct.textContent = `${Math.round(p)}%`;
   }
-  // 100% -> brief glow pulse + sparkle (.is-complete) -> the fill melts back
-  // to transparent (.is-fading), same colour as the header, so it disappears
-  // instead of sitting there as a spent white pill.
-  function finishHeaderProgress() {
-    setHeaderProgress(100);
-    els.headerProgress.classList.add('is-complete');
-    setTimeout(() => {
-      els.headerProgress.classList.add('is-fading');
-      setTimeout(() => { els.headerProgress.hidden = true; }, 500);
-    }, 700);
+
+  // Finish the wipe, hold the fully-dark page for a beat so the result reads,
+  // then fade the whole widget out.
+  function finishRenderProgress() {
+    clearRenderTimers();
+    setRenderProgress(100);
+    els.renderWidget.dataset.state = 'complete';
+    rwFadeTimers.push(setTimeout(() => { els.renderWidget.dataset.state = 'fading'; }, 700));
+    rwFadeTimers.push(setTimeout(hideRenderProgress, 1200));
   }
-  function hideHeaderProgress() { els.headerProgress.hidden = true; }
+
+  function hideRenderProgress() {
+    clearRenderTimers();
+    els.renderWidget.hidden = true;
+    els.renderWidget.dataset.state = 'idle';
+  }
 
   // Verify the conversion changed only colour — warn (once) if anything else moved.
   async function runRetention(convResult, token) {

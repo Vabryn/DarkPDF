@@ -91,96 +91,143 @@ body {
   color: var(--text-pure);
 }
 
-/* Header render-progress: centred in the top bar, shows only while the
-   background full-document conversion pass is running. */
-.header-progress {
+/* ── Conversion progress widget ─────────────────────────────────────────────
+   Replaces the old header progress bar. A miniature page pinned to the corner
+   of the stage: the light sheet on top is clipped away left-to-right, revealing
+   the converted dark sheet beneath it. The wipe position IS the percentage, so
+   the animation is the progress bar rather than a decoration beside one.
+   Everything here is namespaced `rw-` — the source design used bare .card /
+   .row / .header / .light / .dark, which would collide badly in this sheet. */
+.rw-panel {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  right: 18px;
+  bottom: 18px;
+  z-index: 55;                      /* over the canvas, under the page pill + drawer */
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  pointer-events: none;             /* never steals a click from the document */
+  animation: rw-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.45s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
+.rw-panel[hidden] { display: none; }
+.rw-panel[data-state="fading"] { opacity: 0; }
 
-.header-progress-track {
-  width: 150px;
-  height: 4px;
-  border-radius: 999px;
-  background: transparent;              /* matches the header — an empty track is invisible */
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  overflow: visible;                    /* the completion sparkle sits just past the fill's edge */
+/* The 220x300 artboard is kept at its native size and scaled down as one
+   piece, so the proportions stay exactly as designed. RW_SCALE = 0.53. */
+.rw-frame {
   position: relative;
+  width: 117px;                     /* 220 * 0.53 */
+  height: 159px;                    /* 300 * 0.53 */
 }
-
-.header-progress-fill {
-  position: relative;
-  height: 100%;
-  width: 2%;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow: 0 0 7px rgba(255, 255, 255, 0.85), 0 0 2px rgba(255, 255, 255, 0.9);
-  transition: width 0.25s ease, background 0.6s ease, box-shadow 0.6s ease;
+.rw-stage {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 220px;
+  height: 300px;
+  transform: scale(0.53);
+  transform-origin: bottom right;
+  border-radius: 12px;
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.85);
+  /* mirrors the top sheet's colour so the rounded corners never show a seam
+     mid-wipe; it crossfades to the dark page as the wipe completes */
+  background-color: #ffffff;
+  transition: background-color 1.6s cubic-bezier(0.25, 1, 0.5, 1);
 }
-
-.header-progress-fill::after {
-  content: '';
+.rw-clip {
   position: absolute;
   inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
-  background-size: 60px 100%;
-  background-repeat: no-repeat;
-  filter: blur(0.5px);
-  animation: header-progress-glow 1.5s ease-in-out infinite;
+  border-radius: 12px;
+  overflow: hidden;
+  isolation: isolate;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);  /* Safari: clip children to the radius */
+  transform: translateZ(0);
 }
-
-.header-progress.is-complete .header-progress-fill::after { animation: none; opacity: 0; }
-
-/* completion flourish: one bright pulse plus a small sparkle at the leading
-   edge, then (once .is-fading lands) the fill melts back to transparent —
-   same as the header's own background, so the whole bar disappears into it
-   rather than sitting there as a spent white pill. */
-.header-progress.is-complete .header-progress-fill {
-  animation: header-progress-pulse 0.6s ease-out;
-}
-.header-progress.is-complete .header-progress-fill::before {
-  content: '';
+.rw-sheet {
   position: absolute;
-  right: -2px;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 0 10px 3px rgba(255, 255, 255, 0.95);
-  transform: translate(50%, -50%) scale(0);
-  animation: header-progress-sparkle 0.7s ease-out 0.05s;
-}
-.header-progress.is-fading .header-progress-fill {
-  background: transparent;
-  box-shadow: none;
+  inset: 0;
+  padding: 24px 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-@keyframes header-progress-glow {
-  0%   { background-position: -60px 0; }
-  100% { background-position: 150px 0; }
+.rw-head { display: flex; justify-content: space-between; }
+.rw-logo { width: 45px; height: 6px; border-radius: 2px; }
+.rw-date { width: 22px; height: 4px; border-radius: 1px; }
+
+.rw-content { display: flex; flex-direction: column; gap: 12px; }
+.rw-row { display: flex; gap: 10px; }
+.rw-card { flex: 1; height: 34px; border-radius: 6px; }
+
+.rw-chart {
+  height: 75px;
+  border-radius: 6px;
+  padding: 10px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
 }
-@keyframes header-progress-pulse {
-  0%   { box-shadow: 0 0 7px rgba(255, 255, 255, 0.85), 0 0 2px rgba(255, 255, 255, 0.9); }
-  40%  { box-shadow: 0 0 20px 4px rgba(255, 255, 255, 1), 0 0 6px rgba(255, 255, 255, 1); }
-  100% { box-shadow: 0 0 7px rgba(255, 255, 255, 0.85), 0 0 2px rgba(255, 255, 255, 0.9); }
+.rw-bar { width: 12px; border-radius: 2px 2px 0 0; }
+.rw-h40 { height: 40%; } .rw-h80 { height: 80%; } .rw-h60 { height: 60%; } .rw-h95 { height: 95%; }
+
+.rw-text { display: flex; justify-content: space-between; align-items: center; }
+.rw-line { height: 4px; border-radius: 1px; }
+.rw-w40 { width: 40%; } .rw-w20 { width: 20%; }
+
+/* destination: the converted dark page */
+.rw-dark { background: #111215; z-index: 1; }
+.rw-dark .rw-logo { background: #f5f5f7; }
+.rw-dark .rw-date, .rw-dark .rw-line { background: #323236; }
+.rw-dark .rw-card, .rw-dark .rw-chart { background: #1c1c1e; border: 1px solid rgba(255, 255, 255, 0.06); }
+.rw-dark .rw-bar { background: linear-gradient(to top, #2563eb, var(--accent-blue)); }
+
+/* source: the original light page, wiped away as the conversion advances */
+.rw-light {
+  background: #ffffff;
+  z-index: 2;
+  will-change: clip-path;
+  clip-path: inset(0 0 0 0);
+  transition: clip-path 0.4s cubic-bezier(0.25, 1, 0.5, 1);
 }
-@keyframes header-progress-sparkle {
-  0%   { transform: translate(50%, -50%) scale(0); opacity: 0; }
-  35%  { transform: translate(50%, -50%) scale(1.8); opacity: 1; }
-  100% { transform: translate(50%, -50%) scale(0.2); opacity: 0; }
+.rw-light .rw-logo { background: #1d1d1f; }
+.rw-light .rw-date, .rw-light .rw-line { background: #e2e8f0; }
+.rw-light .rw-card, .rw-light .rw-chart { background: #f5f5f7; border: 1px solid rgba(0, 0, 0, 0.05); }
+.rw-light .rw-bar { background: linear-gradient(to top, #0066cc, #0088ff); }
+
+.rw-panel[data-state="complete"] .rw-stage,
+.rw-panel[data-state="fading"] .rw-stage { background-color: #111215; }
+
+.rw-caption {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.rw-pct { color: var(--text-secondary); }
+
+@keyframes rw-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (min-width: 769px) {
+  .workspace:has(.studio-drawer.open) .rw-panel { right: calc(18px + 320px); }
+}
+@media (max-width: 560px) {
+  .rw-panel { right: 12px; bottom: 12px; }
+  .rw-frame { width: 84px; height: 114px; }     /* 220/300 * 0.38 */
+  .rw-stage { transform: scale(0.38); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .header-progress-fill::after { animation: none; }
-  .header-progress.is-complete .header-progress-fill { animation: none; }
-  .header-progress.is-complete .header-progress-fill::before { animation: none; opacity: 0; }
+  .rw-panel { animation: none; }
+  .rw-panel, .rw-stage, .rw-light { transition: none; }
 }
 
 .header-status {
@@ -1222,20 +1269,6 @@ kbd {
   .studio-drawer { width: 100%; right: -100%; }
   .zoom-bar #zoomSlider { width: 62vw; }
   .workspace-nav, .workspace-subnav { padding-left: 10px; padding-right: 10px; }
-
-  /* The "Secure. Private." label is hidden here, freeing the right side of
-     the header. Take the progress bar out of the absolutely-centred slot so
-     it flows right after the wordmark and spans that space instead of
-     sitting as a short stub over the title. */
-  .header-progress {
-    position: static;
-    transform: none;
-    flex: 1 1 auto;
-    min-width: 0;
-    margin-left: 24px;
-    justify-content: flex-end;
-  }
-  .header-progress-track { width: 100%; max-width: 320px; }
 
   /* Wrapped rows fill the width edge-to-edge rather than floating centred
      with big side gutters. Same controls, same sizes — just spread out. */
