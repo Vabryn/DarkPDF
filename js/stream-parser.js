@@ -174,6 +174,109 @@
       return this.hslToRgb(h, clamp(s * oc.saturation, 0, 1), clamp(1 - l, 0.32, 0.86));
     },
 
+    /**
+     * Identifies mathematical rules and inline text decorations outside BT..ET:
+     * fraction bars, radical overbars (square root vinculums), division lines,
+     * accents, and underlines.
+     *
+     * In mathematical typesetting (LaTeX, pdflatex, KaTeX, MathJax, Typst, Word),
+     * variable-length rules are not font glyphs and are drawn outside BT..ET as thin
+     * filled rectangles (re f) or horizontal strokes (m..l S). These must NOT be
+     * recoloured as decorative "Objects" (e.g. turned into accent blue), but must
+     * match the surrounding text color.
+     */
+    _isMathOrTextRule(tokIdx, toks) {
+      let activeLineWidth = 1.0;
+      const pendingNums = [];
+      const pathSegments = [];
+
+      for (let i = tokIdx + 1; i < toks.length && i < tokIdx + 45; i++) {
+        const t = toks[i];
+        if (t.t === 'num') {
+          pendingNums.push(t.v);
+          continue;
+        }
+        if (t.t === 'name' || t.t === 'skip') {
+          continue;
+        }
+        if (t.t === 'op') {
+          const op = t.v;
+          if (op === 'w' && pendingNums.length >= 1) {
+            activeLineWidth = pendingNums[pendingNums.length - 1];
+            pendingNums.length = 0;
+            continue;
+          }
+          // If another color operator is set, this color's scope ended
+          if (/^(g|G|rg|RG|k|K|sc|scn|SC|SCN)$/.test(op)) {
+            break;
+          }
+          // If text begins before any path is constructed, this color was set for text
+          if (op === 'BT' && pathSegments.length === 0) {
+            return true;
+          }
+          if (op === 're' && pendingNums.length >= 4) {
+            const [x, y, w, h] = pendingNums.slice(-4);
+            pathSegments.push({ op: 're', x, y, w, h });
+            pendingNums.length = 0;
+            continue;
+          }
+          if (op === 'm' && pendingNums.length >= 2) {
+            const [x, y] = pendingNums.slice(-2);
+            pathSegments.push({ op: 'm', x, y });
+            pendingNums.length = 0;
+            continue;
+          }
+          if (op === 'l' && pendingNums.length >= 2) {
+            const [x, y] = pendingNums.slice(-2);
+            pathSegments.push({ op: 'l', x, y });
+            pendingNums.length = 0;
+            continue;
+          }
+          // Painting operators
+          if (/^(f|F|f\*|S|s|B|B\*|b|b\*)$/.test(op)) {
+            // Check rectangles: fraction bars, square root vinculums, underlines
+            for (const seg of pathSegments) {
+              if (seg.op === 're') {
+                const minDim = Math.min(Math.abs(seg.w), Math.abs(seg.h));
+                const maxDim = Math.max(Math.abs(seg.w), Math.abs(seg.h));
+                // Math rule or fraction bar or radical overbar:
+                // thickness <= 3.0pt, length between 1.5pt and 280pt, aspect ratio >= 2.5
+                if (minDim <= 3.0 && maxDim >= 1.5 && maxDim <= 280 && (maxDim / Math.max(0.1, minDim)) >= 2.5) {
+                  return true;
+                }
+              }
+            }
+            // Check line strokes: horizontal stroke m -> l
+            for (let s = 0; s < pathSegments.length - 1; s++) {
+              const p1 = pathSegments[s];
+              const p2 = pathSegments[s + 1];
+              if (p1.op === 'm' && p2.op === 'l') {
+                const dy = Math.abs(p2.y - p1.y);
+                const dx = Math.abs(p2.x - p1.x);
+                if (dy <= 0.6 && dx >= 1.5 && dx <= 280 && activeLineWidth <= 3.0) {
+                  return true;
+                }
+              }
+              // Radical hook with horizontal top: m(x0,y0) -> l(x1,y1) -> l(x2,y2) -> l(x3,y3)
+              if (s + 2 < pathSegments.length) {
+                const p3 = pathSegments[s + 2];
+                if (p2.op === 'l' && p3.op === 'l') {
+                  const dy = Math.abs(p3.y - p2.y);
+                  const dx = Math.abs(p3.x - p2.x);
+                  if (dy <= 0.6 && dx >= 1.5 && dx <= 280 && activeLineWidth <= 3.0) {
+                    return true;
+                  }
+                }
+              }
+            }
+            break;
+          }
+          pendingNums.length = 0;
+        }
+      }
+      return false;
+    },
+
     /* ---- tokeniser -------------------------------------------------- */
     _tokenize(buf) {
       const toks = [];
@@ -301,7 +404,7 @@
       let operands = [];
       let curOp = null;
 
-      const takeColor = (op) => {
+      const takeColor = (op, tkIdx) => {
         const stroke = /^[A-Z]/.test(op);
         const lower = op.toLowerCase();
         const cs = stroke ? strokeCS : fillCS;
@@ -329,7 +432,9 @@
           else { stats.skipped++; return; }
         } else { stats.skipped++; return; }
 
-        const nc = inText > 0
+        const chroma = Math.max(rgb[0], rgb[1], rgb[2]) - Math.min(rgb[0], rgb[1], rgb[2]);
+        const isMathOrText = inText > 0 || (chroma < 0.11 && this._isMathOrTextRule(tkIdx, toks));
+        const nc = isMathOrText
           ? this.remapTextColor(rgb[0], rgb[1], rgb[2], tc)
           : this.remapObjectColor(rgb[0], rgb[1], rgb[2], stroke, oc, bg);
 
@@ -342,7 +447,8 @@
         stats.remapped++;
       };
 
-      for (const tk of toks) {
+      for (let tkIdx = 0; tkIdx < toks.length; tkIdx++) {
+        const tk = toks[tkIdx];
         if (tk.t === 'num' || tk.t === 'name') { operands.push(tk); continue; }
         if (tk.t !== 'op') { operands = []; continue; }        // 'skip' tokens reset operand accumulation
 
@@ -355,7 +461,7 @@
           case 'cs': { const nm = operands.filter((o) => o.t === 'name').pop(); if (nm) fillCS = this._resolveCS(nm.v, csMap); break; }
           case 'CS': { const nm = operands.filter((o) => o.t === 'name').pop(); if (nm) strokeCS = this._resolveCS(nm.v, csMap); break; }
           case 'g': case 'G': case 'rg': case 'RG': case 'k': case 'K':
-          case 'sc': case 'scn': case 'SC': case 'SCN': takeColor(tk.v); break;
+          case 'sc': case 'scn': case 'SC': case 'SCN': takeColor(tk.v, tkIdx); break;
         }
         operands = [];
       }

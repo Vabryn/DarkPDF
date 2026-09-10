@@ -1,4 +1,5 @@
-const puppeteer = require('puppeteer');
+let puppeteer;
+try { puppeteer = require('puppeteer'); } catch (e) { puppeteer = require('/Users/karomrivera/Documents/Sync/Repository/Ledger/node_modules/puppeteer'); }
 const path = require('path');
 const fs = require('fs');
 

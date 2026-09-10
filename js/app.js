@@ -41,11 +41,12 @@
     'studioObjColor', 'studioObjHex', 'toggleObjRecolor', 'sliderObjSaturation', 'valObjSaturation',
     'sliderObjBorder', 'valObjBorder',
     'progressModal', 'progressBar', 'progressPercent', 'progressStatus', 'btnCancelProgress',
-    'renderWidget', 'renderWidgetDrain', 'renderWidgetFill', 'renderWidgetLight', 'renderWidgetPct'
+    'renderWidget', 'renderWidgetDrain', 'renderWidgetFill', 'renderWidgetLight', 'renderWidgetPct', 'renderWidgetLabel'
   ].forEach((id) => { els[id] = document.getElementById(id); });
 
   let converter, viewer;
   let previewTimer = null, fullTimer = null, previewToken = 0, fullToken = 0;
+  let renderAction = 'converting'; // 'converting' | 'customizing'
 
   /* ---- colour helpers (compose the background from base hue + sliders) ---- */
   const hexToRgb = (hex) => {
@@ -269,6 +270,9 @@
       objSaturation: +els.sliderObjSaturation.value / 100,
       objBorderBrightness: +els.sliderObjBorder.value / 100
     });
+    renderAction = 'customizing';
+    if (els.renderWidgetLabel) els.renderWidgetLabel.textContent = 'Customizing';
+    if (els.renderWidget) els.renderWidget.setAttribute('aria-label', 'Customizing document');
     invalidateConversion();
     scheduleRefresh();
   }
@@ -584,9 +588,14 @@
   let rwFadeTimers = [];
   function clearRenderTimers() { rwFadeTimers.forEach(clearTimeout); rwFadeTimers = []; }
 
-  function showRenderProgress() {
+  function showRenderProgress(action) {
+    if (action) renderAction = action;
     clearRenderTimers();
     if (!els.renderWidget) return;
+    if (els.renderWidgetLabel) {
+      els.renderWidgetLabel.textContent = renderAction === 'customizing' ? 'Customizing' : 'Converting';
+    }
+    els.renderWidget.setAttribute('aria-label', renderAction === 'customizing' ? 'Customizing document' : 'Converting document to dark mode');
     els.renderWidget.hidden = false;
     // Snap positions back to 0% instantly before starting
     if (els.renderWidgetDrain) {
@@ -632,6 +641,8 @@
     if (!els.renderWidget) return;
     els.renderWidget.hidden = true;
     els.renderWidget.dataset.state = 'idle';
+    renderAction = 'converting';
+    if (els.renderWidgetLabel) els.renderWidgetLabel.textContent = 'Converting';
   }
 
   // Verify the conversion changed only colour — warn (once) if anything else moved.
@@ -743,6 +754,7 @@
     if (isCover) state.coverPages.add(0);
     viewer.setPageIsImage(isCover);
 
+    renderAction = 'converting';
     invalidateConversion();
     runPreview();
     scheduleFull();
