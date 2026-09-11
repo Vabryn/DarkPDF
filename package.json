@@ -2,7 +2,8 @@
   "name": "darkpdf",
   "private": true,
   "scripts": {
-    "test": "node tests/run.cjs"
+    "test": "node tests/run.cjs",
+    "deploy": "node scripts/stamp-version.mjs && npx wrangler deploy --tag \"$(git rev-parse --short HEAD)\" --message \"$(git log -1 --format=%s)\""
   },
   "devDependencies": {
     "puppeteer": "25.10.0"
